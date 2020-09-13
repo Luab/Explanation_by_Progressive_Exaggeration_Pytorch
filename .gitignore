@@ -1,3 +1,4 @@
 *.zip
 *.xml
 /.idea
+/data/CelebA/images

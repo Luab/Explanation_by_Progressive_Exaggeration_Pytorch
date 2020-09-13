@@ -17,11 +17,12 @@ def prepare_data(config_path='configs/celebA_YSBBB_Classifier.yaml'):
     zip_save = image_dir = os.path.join(celeba_dir, "images")
     text_dir = os.path.join(celeba_dir, "list_attr_celeba.txt")
 
-    config = yaml.load(config_path)
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
 
-    assert (os.path.exists(zip_path), f"File img_align_celeba.zip does not lie in {celeba_dir} folder!")
+    assert os.path.isfile(zip_path), f"File img_align_celeba.zip does not lie in {celeba_dir} folder!"
 
-    print("Config  file:", config, sep='\n')
+    print("Config  file:", str(config), sep='\n')
 
     # Checking that path images is not empty
     if os.path.exists(zip_save):
@@ -37,7 +38,10 @@ def prepare_data(config_path='configs/celebA_YSBBB_Classifier.yaml'):
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(celeba_dir)
 
+
+
     os.rename(os.path.join(celeba_dir, "img_align_celeba"), zip_save)
+    assert os.path.isdir(image_dir)
 
     print("Image dir:", image_dir)
     print("Text dir:", text_dir)
@@ -60,3 +64,6 @@ def prepare_data(config_path='configs/celebA_YSBBB_Classifier.yaml'):
         print("Number of images:", bin_dataframe.shape[0])
         print("Categories:", bin_dataframe.columns)
         print("First attributes:", bin_dataframe.iloc[0])
+
+if __name__ == '__main__':
+    prepare_data()
