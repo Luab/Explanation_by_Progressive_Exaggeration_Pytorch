@@ -1,7 +1,4 @@
-# Description: read data from configs and preprocess it
-
 import os
-
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -11,13 +8,6 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
-
-# Think about
-# output_dir = os.path.join(config['log_dir'], config['name'])
-
-# Read data file = df.iloc: popping attrubutes by their name
-
-# Убрать .npy файлы!
 
 class DataModule(pl.LightningModule):
     class _Dataset(Dataset):
@@ -70,6 +60,8 @@ class DataModule(pl.LightningModule):
             transforms.Normalize(mean=(0.5, 0.5, 0.5), std=[2, 2, 2])
         ])
 
+        self.prepare_data()
+
         assert os.path.isdir(self.image_dir), f"Check image path:{self.image_dir}!"
         assert os.path.isfile(self.data_path), f"File {self.data_path} is not found!"
 
@@ -88,20 +80,3 @@ class DataModule(pl.LightningModule):
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, self.batch_size, False)
-
-
-if __name__ == '__main__':
-    dataModule = DataModule()
-    dataModule.prepare_data()
-    print(len(dataModule.train_dataset), len(dataModule.val_dataset))
-
-    # for i in range(len(dataModule.train_dataset)):
-    #     print(i, ":", dataModule.train_dataset[i][1])
-    #
-    # size = len(dataModule.train_dataset)
-    # for i in range(len(dataModule.val_dataset)):
-    #     print(i + size, ":", dataModule.val_dataset[i][1])
-
-    import matplotlib.pyplot as plt
-    plt.imshow(dataModule.train_dataset[1][0][0].numpy(), cmap='gray')
-    plt.show()
