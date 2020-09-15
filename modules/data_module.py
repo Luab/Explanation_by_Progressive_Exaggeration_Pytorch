@@ -20,7 +20,6 @@ class DataModule(pl.LightningModule):
                 self.data = self.data.sample(frac=1)
 
         def __getitem__(self, item):
-            # TODO(check outputting labels as 1D tensors)
             line = self.data.iloc[item]
             image_path, labels = line[0], line[1:]
 
@@ -36,17 +35,13 @@ class DataModule(pl.LightningModule):
         def __len__(self):
             return self.data.shape[0]
 
-    def __init__(self, config_path='configs/celebA_YSBBB_Classifier.yaml'):
+    def __init__(self, config):
         super().__init__()
-
-        with open(config_path) as f:
-            self.config = yaml.safe_load(f)
-
-        print("Config  file:", self.config, sep='\n')
-
-        self.image_dir = self.config['image_dir']
-        self.data_path = self.config['image_label_dict']
-        self.batch_size = self.config['batch_size']
+        
+        self.image_dir = config['image_dir']
+        self.data_path = config['image_label_dict']
+        self.batch_size = config['batch_size']
+        
         print(
             f"Image dir: {self.image_dir}\n"
             f"Data path: {self.data_path}\n"
@@ -69,7 +64,6 @@ class DataModule(pl.LightningModule):
     def prepare_data(self):
         data = pd.read_csv(self.data_path)
 
-        # They don't have test data, only val data, why?
         train_data, val_data = train_test_split(data, test_size=0.33)
 
         self.train_dataset = DataModule._Dataset(train_data, self.image_dir, self.transforms, True)
