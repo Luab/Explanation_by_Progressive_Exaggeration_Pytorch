@@ -1,10 +1,7 @@
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
 import torchvision.models as models
 import torch.nn as nn
 import torch
-import yaml
-import argparse
 
 
 class DenseNet121(pl.LightningModule):
@@ -22,7 +19,6 @@ class DenseNet121(pl.LightningModule):
         self.model.classifier = nn.Linear(num_ftrs, self.n_classes)
         
         self.loss = nn.BCEWithLogitsLoss()
-        self.current_epoch = 0
 
 
     def forward(self, x):
@@ -48,5 +44,5 @@ class DenseNet121(pl.LightningModule):
         outputs = self(images)
         validation_loss = self.loss(outputs, targets)
         result = pl.EvalResult(checkpoint_on=validation_loss)
-        result.log('val_loss', validation_loss, on_epoch=True)
+        result.log('val_loss', validation_loss, on_step=True, on_epoch=True)
         return result

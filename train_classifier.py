@@ -18,9 +18,9 @@ def main():
         config = yaml.safe_load(f)
 
     checkpoint_callback = ModelCheckpoint(
-        filepath=os.path.join('checkpoints/classifier', (os.path.basename(config_path) + 'model.ckpt')),
+        filepath=os.path.join('checkpoints/classifier', config['name'], 'model.ckpt'),
         save_last=True,
-        save_top_k=5,
+        save_top_k=1,
         verbose=True,
         monitor='val_loss',
         mode='min'
