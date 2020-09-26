@@ -1,5 +1,5 @@
-from modules.model_module import DenseNet121
-from modules.data_module import DataModule
+from modules.DenseNet import DenseNet121
+from modules.DataModule import DataModule
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
