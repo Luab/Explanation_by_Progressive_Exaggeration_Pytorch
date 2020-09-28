@@ -4,6 +4,17 @@ import torch.nn.functional as F
 import torch
 
 
+class Upsampling(pl.LightningModule):
+    def __init__(self, scale_factor, mode):
+        super().__init__()
+        self.upsampling = nn.Upsample(scale_factor, mode)
+
+    def forward(self, x):
+        x = self.upsampling(x)
+
+        return x
+
+
 class Downsampling(pl.LightningModule):
     def __init__(self, kernel_size, stride):
         super().__init__()
@@ -14,7 +25,8 @@ class Downsampling(pl.LightningModule):
     def forward(self, x):
 
         #   input dimension (height or width)
-        dim_in = x.shape[1]
+        #   it is assumed that the input has the shape [batch_size, channels, height, width]
+        dim_in = x.shape[2]
 
         #   padding = 'SAME'
         padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
@@ -49,7 +61,7 @@ class InnerProduct(pl.LightningModule):
         self.v = self.v.transpose(0, 1)
         self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
 
-        temp = torch.index_select(input=v, dim=0, index=y)
+        temp = torch.index_select(self.v, dim=0, index=y)
         temp = torch.sum(temp * x, 1, keepdim=True)
 
         return temp
@@ -65,11 +77,77 @@ class GlobalSumPooling(pl.LightningModule):
         return x
 
 
+class GeneratorEncoderResblock(pl.LightningModule):
+    def __init__(self, in_channels, out_channels, is_sn=False):
+        super().__init__()
+
+        self.identity = nn.Identity()
+        self.bn1 = nn.BatchNorm2d(num_features=in_channels)
+        self.relu = nn.ReLU()
+        self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
+        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
+        self.bn2 = nn.BatchNorm2d(num_features=out_channels)
+        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
+        self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
+
+    def forward(self, x):
+        temp = self.identity(x)
+
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.downsampling(x)
+        x = self.conv1(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+
+        temp = self.downsampling(temp)
+        temp = self.conv_identity(temp)
+
+        x += temp
+
+        return x
+
+
+class GeneratorResblock(pl.LightningModule):
+    def __init__(self, in_channels, out_channels, is_sn=False):
+        super().__init__()
+
+        self.identity = nn.Identity()
+        self.bn1 = nn.BatchNorm2d(num_features=in_channels)
+        self.relu = nn.ReLU()
+        self.upsampling = Upsampling(scale_factor=2, mode='nearest')
+        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
+        self.bn2 = nn.BatchNorm2d(num_features=out_channels)
+        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
+        self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
+
+    def forward(self, x):
+        temp = self.identity(x)
+
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.upsampling(x)
+        x = self.conv1(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+
+        temp = self.upsampling(temp)
+        temp = self.conv_identity(temp)
+
+        x += temp
+
+        return x
+
+
 class DiscriminatorResBlock(pl.LightningModule):
     def __init__(self, in_channels, out_channels, is_down=True, is_sn=True, is_first=False):
         super().__init__()
 
-        self.out_channels = out_channels
+        self.identity = nn.Identity()
         self.is_down = is_down
         self.is_first = is_first
         self.relu = nn.ReLU()
@@ -79,7 +157,7 @@ class DiscriminatorResBlock(pl.LightningModule):
         self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
 
     def forward(self, x):
-        temp = nn.Identity(x)
+        temp = self.identity(x)
 
         if not self.is_first:
             x = self.relu(x)
@@ -106,7 +184,7 @@ class SpectralConv2d(pl.LightningModule):
         super().__init__()
 
         #   Assuming that stride = 1
-        padding = int(kernel_size - 1) / 2
+        padding = int((kernel_size - 1) / 2)
         self.conv = nn.Conv2d(in_channels, out_channels, padding, kernel_size, stride)
 
         if is_sn:
