@@ -40,14 +40,14 @@ class Dense(pl.LightningModule):
 
 
 class InnerProduct(pl.LightningModule):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, n_classes):
         super().__init__()
 
-        self.in_channels = in_channels
+        self.v = nn.init.xavier_uniform(torch.empty(size=[n_classes, in_channels]))
 
-    def forward(self, x, y, n_classes):
-        v = nn.init.xavier_uniform(torch.empty(size=[n_classes, self.in_channels])).transpose(0, 1)
-        v = nn.utils.spectral_norm(v).transpose(0, 1)
+    def forward(self, x, y):
+        self.v = self.v.transpose(0, 1)
+        self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
 
         temp = torch.index_select(input=v, dim=0, index=y)
         temp = torch.sum(temp * x, 1, keepdim=True)
