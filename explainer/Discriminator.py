@@ -14,7 +14,7 @@ class Discriminator(pl.LightningModule):
         self.d_res_block5 = DiscriminatorResBlock(in_channels=512, out_channels=1024, is_down=False)
         self.relu = nn.ReLU()
         self.global_sum_pooling = GlobalSumPooling()
-        self.inner_product = InnerProduct(in_channels=1024, n_classes=2)
+        self.inner_product = InnerProduct()
         self.dense = Dense(in_channels=1024, out_channels=1, is_sn=True)
 
     def forward(self, x, y, n_classes):
@@ -30,11 +30,12 @@ class Discriminator(pl.LightningModule):
 
         for i in range(0, n_classes - 1):
             if i == 0:
-                temp = self.inner_product(x, y[:, i + 1], 2)
+                temp = InnerProduct(x, y[:, i + 1], 2)
             else:
-                temp += self.inner_product(x, y[:, i + 1], 2)
+                temp += InnerProduct(x, y[:, i + 1], 2)
 
-        x = self.dense(x, 1, is_sn=True)
+        x = Dense()(x, 1, is_sn=True)
+
         x += temp
 
         return x
