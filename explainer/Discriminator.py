@@ -7,7 +7,8 @@ class Discriminator(pl.LightningModule):
     def __init__(self):
         super().__init__()
 
-        self.d_res_block1 = DiscriminatorResBlock(in_channels=3, out_channels=64)
+        # Added that this block is first
+        self.d_res_block1 = DiscriminatorResBlock(in_channels=3, out_channels=64, is_first=True)
         self.d_res_block2 = DiscriminatorResBlock(in_channels=64, out_channels=128)
         self.d_res_block3 = DiscriminatorResBlock(in_channels=128, out_channels=256)
         self.d_res_block4 = DiscriminatorResBlock(in_channels=256, out_channels=512)

@@ -42,10 +42,18 @@ class Dense(pl.LightningModule):
 
         self.fc = nn.Linear(in_channels, out_channels)
 
-        if is_sn:
-            self.fc = nn.utils.spectral_norm(self.fc)
+        self.is_sn = is_sn
+
+
 
     def forward(self, x):
+
+        # If I understood correctly, each time when we get from memory (tf.get_variable) var.
+        # We need to pass it through spectral_norm
+        # Also, bias shouldn't be passed to a spectral_norm, but now let's forget about it
+        if self.is_sn:
+            self.fc = nn.utils.spectral_norm(self.fc)
+
         x = self.fc(x)
 
         return x
@@ -75,7 +83,6 @@ class GlobalSumPooling(pl.LightningModule):
         x = torch.sum(x, [1, 2])
 
         return x
-
 
 class GeneratorEncoderResblock(pl.LightningModule):
     def __init__(self, in_channels, out_channels, is_sn=False):
