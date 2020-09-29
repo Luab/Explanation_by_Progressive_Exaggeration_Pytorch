@@ -10,14 +10,15 @@ from explainer.Discriminator import Discriminator
 import torch
 import torch.nn as nn
 
+
 class Explainer(pl.LightningModule):
     def __init__(self, config: dict, pretrained_classifier: pl.LightningModule):
+        super().__init__()
         self.channels = config['channels']
         self.lambda_GAN = config['lambda_GAN']
         self.num_class = config['classes']
         self.num_binary_outputs = config['num_bins']
         self.target_class = config['target_class']
-
 
         # Turn off gradients
         self.pretrained_classifier = pretrained_classifier
@@ -26,8 +27,6 @@ class Explainer(pl.LightningModule):
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.discriminator = Discriminator()
-
-
 
     def configure_optimizers(self):
         # We have separated classes into 2 separate files,
@@ -40,8 +39,12 @@ class Explainer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # Need to think, how many outputs classes we have in pretrained_classifier
-        #
+        # I don't understand where there here delta's
         x_source, y_target = batch
+
+        # ============= G & D =============
+        real_source_logits: torch.Tensor = self.discriminator(x_source)
+
         fake_target_img_embedding = self.encoder(x_source)
         fake_target_img = self.decoder(fake_target_img_embedding)
         fake_source_img_embedding = self.encoder(fake_target_img)
@@ -49,24 +52,19 @@ class Explainer(pl.LightningModule):
 
         fake_target_logits = self.discriminator(fake_target_img)
 
-        real_img_cls_logit_pretrained, real_ing_cls_prediction = self.pretrained_classifier(x_source)
+        real_img_cls_logit_pretrained, real_img_cls_prediction = self.pretrained_classifier(x_source)
         fake_img_cls_logit_pretrained, fake_img_cls_prediction = self.pretrained_classifier(fake_target_img)
-        real_img_recons_cls_logit_pretrained, real_img_recons_cls_prediction = self.pretrained_classifier(fake_source_img)
+        real_img_recons_cls_logit_pretrained, real_img_recons_cls_prediction = self.pretrained_classifier(
+            fake_source_img)
 
+        fake_evaluation_loss = nn.BCELoss()(y_target * 0.1, fake_img_cls_prediction[:, self.target_class])
 
-        real_p = y_target * 0.1
-        fake_q = fake_img_cls_prediction[:, self.target_class]
-        fake_evaluation = (real_p * torch.tan(fake_q)) + ( (1 - real_p) * torch.log(1 - fake_q))
-        fake_evaluation = -torch.sum(fake_evaluation)
+        recons_evaluation_loss = nn.BCELoss()(real_img_cls_prediction[:, self.target_class],
+                                              real_img_recons_cls_prediction[:, self.target_class])
 
-
-
-
-
-
-
-
-
+        D_loss_GAN = \
+            -torch.mean(torch.min(torch.tensor([0.0]), -1.0 + real_source_logits)) \
+            - torch.mean(torch.min(torch.tensor([0.0]), -1.0 - fake_target_logits))
 
 
 def main():
@@ -78,10 +76,6 @@ def main():
     config_path = args.config
     with open(config_path) as f:
         config = yaml.safe_load(f)
-
-
-
-
 
 
 if __name__ == '__main__':
