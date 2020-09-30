@@ -4,14 +4,51 @@ import torch.nn.functional as F
 import torch
 
 
+#   Code is borrowed from here:
+#   https://github.com/PyTorchLightning/PyTorch-Lightning-Bolts/blob/master/pl_bolts/models/gans/basic/basic_gan_module.py#L10-L169
 class DiscriminatorLoss(pl.LightningModule):
-    def __init__(self, loss_func):
+    def __init__(self, loss_func=F.multilabel_margin_loss):
         super().__init__()
 
         self.loss_func = loss_func
 
-    def forward(self, real, fake):
-        pass
+    #   Already generated images are passed
+    def forward(self, x_real, x_fake):
+        b = x_real.size(0)
+        x_real = x_real.view(b, -1)
+        y_real = torch.ones(b, 1)
+
+        #   calculate real score
+        output = self.discriminator(x_real)
+        real_loss = F.binary_cross_entropy(output, y_real)
+
+        y_fake = torch.zeros(b, 1)
+
+        # calculate fake score
+        output = self.discriminator(x_fake)
+        fake_loss = self.loss_func(output, y_fake)
+
+        # gradient backpropagation & optimize ONLY D's parameters
+        loss = real_loss + fake_loss
+
+        return loss
+
+
+class GeneratorLoss(pl.LightningModule):
+    def __init__(self, loss_func=F.multilabel_margin_loss):
+        super().__init__()
+
+        self.loss_func = loss_func
+
+    #   Already generated images are passed
+    def forward(self, x_fake):
+        y_fake = torch.ones(x_fake.size(0), 1)
+
+        # calculate fake score
+        output = self.discriminator(x_fake)
+        loss = self.loss_func(output, y_fake)
+
+        return loss
 
 
 class Upsampling(pl.LightningModule):

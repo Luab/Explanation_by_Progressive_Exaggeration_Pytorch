@@ -1,11 +1,9 @@
 import pytorch_lightning as pl
 from explainer.Discriminator import Discriminator
 from explainer.GeneratorEncoderDecoder import GeneratorEncoderDecoder
-#from explainer.utils import GeneratorLoss, DiscriminatorLoss
-import torch.nn as nn
+from explainer.utils import DiscriminatorLoss, GeneratorLoss
 
 
-#
 class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
@@ -27,8 +25,13 @@ class Explainer(pl.LightningModule):
         self.G = GeneratorEncoderDecoder()
         self.D = Discriminator()
 
-        #self.D_loss_GAN =
+        g_loss_gan = GeneratorLoss()
+        d_loss_gan = DiscriminatorLoss()
 
     def forward(self):
         pass
+
+
+
+
 
