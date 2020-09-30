@@ -4,9 +4,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import os
 import argparse
 import yaml
-from explainer.Decoder import Decoder
-from explainer.Encoder import Encoder
+from classifier.DenseNet import DenseNet121
 from explainer.Discriminator import Discriminator
+from explainer.GeneratorEncoderDecoder import GeneratorEncoderDecoder
+
 import torch
 import torch.nn as nn
 

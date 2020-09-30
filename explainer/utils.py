@@ -4,6 +4,16 @@ import torch.nn.functional as F
 import torch
 
 
+class DiscriminatorLoss(pl.LightningModule):
+    def __init__(self, loss_func):
+        super().__init__()
+
+        self.loss_func = loss_func
+
+    def forward(self, real, fake):
+        pass
+
+
 class Upsampling(pl.LightningModule):
     def __init__(self, scale_factor, mode):
         super().__init__()
