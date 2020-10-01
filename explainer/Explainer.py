@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 
 
+#   References:
+#   https://github.com/PyTorchLightning/PyTorch-Lightning-Bolts/blob/master/pl_bolts/models/gans/basic/basic_gan_module.py
 class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
@@ -106,8 +108,6 @@ class Explainer(pl.LightningModule):
         return result
 
     #   TODO check validity of loss functions for discriminator and generator
-    #   Code is borrowed from here:
-    #   https://github.com/PyTorchLightning/PyTorch-Lightning-Bolts/blob/master/pl_bolts/models/gans/basic/basic_gan_module.py#L10-L169
     #   x_real, x_fake are truth image and generated image respectively
     @staticmethod
     def discriminator_loss(self, real, fake, loss_func=F.multilabel_margin_loss):
