@@ -4,6 +4,29 @@ import torch.nn.functional as F
 import torch
 
 
+class ConditionalBatchNorm2d(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, y=None, n_bins=None):
+        if y is None:
+            beta = nn.init.constant(torch.empty([x.shape[1]]), 0.)
+            gamma = nn.init.constant(torch.empty([x.shape[1]]), 1.)
+        else:
+            beta = nn.init.constant(torch.empty([n_bins, x.shape[1]]), 0.)
+            gamma = nn.init.constant(torch.empty([n_bins, x.shape[1]]), 1.)
+
+            # beta, gamma = torch.index_select(beta, index=y), torch.select(gamma, index=y)
+            beta_embedding, gamma_embedding = nn.Embedding.from_pretrained(beta), nn.Embedding.from_pretrained(gamma)
+            beta, gamma = beta_embedding(y), gamma_embedding(y)
+            beta = torch.reshape(beta, shape=[-1, x.shape[1], 1, 1])
+            gamma = torch.reshape(gamma, shape=[-1, x.shape[1], 1, 1])
+
+        batch_mean = torch.mean(x, dim=[0, 2, 3], keepdim=True)
+
+        #   TODO finish Conditional Batch Notmalization module
+
+
 class Upsampling(pl.LightningModule):
     def __init__(self, scale_factor, mode):
         super().__init__()
@@ -23,7 +46,6 @@ class Downsampling(pl.LightningModule):
         self.stride = stride
 
     def forward(self, x):
-
         #   input dimension (height or width)
         #   it is assumed that the input has the shape [batch_size, channels, height, width]
         dim_in = x.shape[2]
@@ -45,7 +67,6 @@ class Dense(pl.LightningModule):
         if is_sn:
             self.fc = nn.utils.spectral_norm(self.fc)
 
-
     def forward(self, x):
         x = self.fc(x)
 
@@ -62,7 +83,9 @@ class InnerProduct(pl.LightningModule):
         self.v = self.v.transpose(0, 1)
         self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
 
-        temp = torch.index_select(self.v, dim=0, index=y)
+        temp = nn.Embedding.from_pretrained(embeddings=self.v)(y)
+
+        # temp = torch.index_select(self.v, dim=0, index=y)
         temp = torch.sum(temp * x, 1, keepdim=True)
 
         return temp
@@ -77,6 +100,7 @@ class GlobalSumPooling(pl.LightningModule):
 
         return x
 
+
 class GeneratorEncoderResblock(pl.LightningModule):
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
@@ -85,9 +109,11 @@ class GeneratorEncoderResblock(pl.LightningModule):
         self.bn1 = nn.BatchNorm2d(num_features=in_channels)
         self.relu = nn.ReLU()
         self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
-        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
+        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
         self.bn2 = nn.BatchNorm2d(num_features=out_channels)
-        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
+        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
@@ -151,9 +177,12 @@ class DiscriminatorResBlock(pl.LightningModule):
         self.is_down = is_down
         self.is_first = is_first
         self.relu = nn.ReLU()
-        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
-        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, is_sn=is_sn)
-        self.conv_identity = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=1, is_sn=is_sn)
+        self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
+        self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
+                                    is_sn=is_sn)
+        self.conv_identity = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=1,
+                                            is_sn=is_sn)
         self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
 
     def forward(self, x):

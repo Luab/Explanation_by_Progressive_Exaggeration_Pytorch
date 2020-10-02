@@ -4,6 +4,8 @@ from explainer.GeneratorEncoderDecoder import GeneratorEncoderDecoder
 from classifier.DenseNet import DenseNet121
 import torch
 import torch.nn.functional as F
+import numpy as np
+import os
 
 
 #   References:
@@ -12,7 +14,6 @@ class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
 
-        self.ckpt_dir_cls = config['cls_experiment']
         self.batch_size = config['batch_size']
         self.epochs = config['epochs']
         self.channels = config['num_channel']
@@ -29,10 +30,11 @@ class Explainer(pl.LightningModule):
         self.G = GeneratorEncoderDecoder()
         self.D = Discriminator()
 
-        #   TODO make the model return logits and prediction
         self.model = DenseNet121(config)
+        cls_ckpt_path = os.path.join(config['cls_experiment'], 'model.ckpt')
+        self.model.load_state_dict(torch.load(cls_ckpt_path))
+        self.model.eval()
 
-    #   TODO implement Conditional Batch Normalization
     def forward(self, x, y):
         return self.G(x, y)
 
@@ -42,15 +44,20 @@ class Explainer(pl.LightningModule):
 
         return [g_opt, d_opt], []
 
-    #   TODO find out how to put in batch three variables: x_source, y_t, y_s
     def training_step(self, batch, batch_idx, optimizer_idx):
-        x_source, y_t, y_s = batch
+        x_source, y_s = batch
+        y_s = y_s.view(-1)
+        y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
+
+        y_t = np.random.randint(low=0, high=self.n_bins, size=self.batch_size)
+        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
 
         result = None
 
-        if optimizer_idx == 0:
+        if (batch_idx + 1) % 5 == 0 and optimizer_idx == 0:
             result = self.generator_step(x_source, y_target, y_source)
 
         if optimizer_idx == 1:
@@ -74,14 +81,20 @@ class Explainer(pl.LightningModule):
 
         g_loss_cyc = F.l1_loss(x_source, fake_source_img)
 
-        fake_img_cls_logit_pretrained, fake_img_cls_prediction = self.model(fake_target_img)
+        fake_img_cls_logit_pretrained = self.model(fake_target_img)
+        fake_img_cls_prediction = F.binary_cross_entropy_with_logits(fake_img_cls_logit_pretrained)
         fake_q = fake_img_cls_prediction[:, self.target_class]
         real_p = torch.tensor(y_target, dtype=torch.float32) * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
 
-        real_img_recons_cls_logit_pretrained, real_img_recons_cls_prediction = self.model(fake_source_img)
-        real_img_cls_logits_pretrained, real_img_cls_prediction = self.model(x_source)
-        recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(real_img_recons_cls_prediction[:, self.target_class]) + (1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(1 - real_img_recons_cls_prediction[:, self.target_class])
+        real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
+        real_img_recons_cls_prediction = F.binary_cross_entropy_with_logits(real_img_recons_cls_logit_pretrained)
+        real_img_cls_logits_pretrained = self.model(x_source)
+        real_img_cls_prediction = F.binary_cross_entropy_with_logits(real_img_cls_logits_pretrained)
+        recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(
+            real_img_recons_cls_prediction[:, self.target_class]) + (
+                                        1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(
+            1 - real_img_recons_cls_prediction[:, self.target_class])
         recons_evaluation -= torch.mean(recons_evaluation)
 
         g_loss = g_loss_gan * self.lambda_gan + g_loss_rec * self.lambda_cyc + g_loss_cyc * self.lambda_cyc + fake_evaluation * self.lambda_cls + recons_evaluation * self.lambda_cls
@@ -108,7 +121,6 @@ class Explainer(pl.LightningModule):
         return result
 
     #   TODO check validity of loss functions for discriminator and generator
-    #   x_real, x_fake are truth image and generated image respectively
     @staticmethod
     def discriminator_loss(self, real, fake, loss_func=F.multilabel_margin_loss):
         b = real.size(0)
@@ -137,3 +149,13 @@ class Explainer(pl.LightningModule):
         loss = fake_loss
 
         return loss
+
+    @staticmethod
+    def convert_ordinal_to_binary(y, n):
+        y = np.asarray(y).astype(int)
+        new_y = np.zeros([y.shape[0], n])
+        new_y[:, 0] = y
+        for i in range(0, y.shape[0]):
+            for j in range(1, y[i] + 1):
+                new_y[i, j] = 1
+        return new_y
