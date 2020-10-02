@@ -11,8 +11,10 @@ import os
 #   References:
 #   https://github.com/PyTorchLightning/PyTorch-Lightning-Bolts/blob/master/pl_bolts/models/gans/basic/basic_gan_module.py
 class Explainer(pl.LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, logger=None):
         super().__init__()
+
+        self.logger = logger
 
         self.batch_size = config['batch_size']
         self.epochs = config['epochs']
@@ -65,10 +67,13 @@ class Explainer(pl.LightningModule):
 
         return result
 
+    def validation_step(self, batch, batch_idx):
+        pass
+
     #   I suppose that we do not need validation_step
     def generator_step(self, x_source, y_target, y_source):
 
-        #   We have to implement conditional batch norm!!!
+        #   TODO implement conditional batch norm!!!
         fake_target_img, fake_target_img_embedding = self(x_source, y_target)
         fake_source_recons_img, x_source_img_embedding = self(x_source, y_source)
         fake_source_img, fake_source_img_embedding = self(fake_target_img, y_source)
