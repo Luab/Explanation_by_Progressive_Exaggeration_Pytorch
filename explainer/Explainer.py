@@ -99,13 +99,14 @@ class Explainer(pl.LightningModule):
         recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(
             real_img_recons_cls_prediction[:, self.target_class]) + (
                                         1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(
-            1 - real_img_recons_cls_prediction[:, self.target_class])
-        recons_evaluation -= torch.mean(recons_evaluation)
+            1 - real_img_recons_cls_prediction[:, self.target_class]) #  F.binary_cross_entropy
+        recons_evaluation -= torch.mean(recons_evaluation) # May be =, not -=?
 
         g_loss = g_loss_gan * self.lambda_gan + g_loss_rec * self.lambda_cyc + g_loss_cyc * self.lambda_cyc + fake_evaluation * self.lambda_cls + recons_evaluation * self.lambda_cls
 
         result = pl.TrainResult(minimize=g_loss, checkpoint_on=g_loss)
-        result.log('g_loss', on_step=True, on_epoch=True, prog_bar=True)
+        # Passed value to logging, may be we need to pass all values (recons_evaluation, fake_evaluation losses) to track it?
+        result.log('g_loss', g_loss, on_step=True, on_epoch=True, prog_bar=True)
 
         return result
 
@@ -126,8 +127,16 @@ class Explainer(pl.LightningModule):
         return result
 
     #   TODO check validity of loss functions for discriminator and generator
-    @staticmethod
+    # ! F.multilabel_margin_loss is different from hinge in their repo
+    # ! Just make one-by-one like in article
+    # if loss_func == 'hinge':
+    #     zero = torch.tensor([0.0])
+    #     real_loss = - torch.mean(torch.min(zero, -1.0 + real))
+    #     fake_loss = - torch.mean(torch.min(zero, -1.0 - fake))
+    #     return real_loss + fake_loss
+    # ! May be pass type of loss like 'str', not like a function?
     def discriminator_loss(self, real, fake, loss_func=F.multilabel_margin_loss):
+
         b = real.size(0)
         y_real = torch.ones(b, 1)
 
@@ -144,7 +153,6 @@ class Explainer(pl.LightningModule):
 
         return loss
 
-    @staticmethod
     def generator_loss(self, fake, loss_func=F.multilabel_margin_loss):
         fake_loss = 0
 
@@ -155,6 +163,8 @@ class Explainer(pl.LightningModule):
 
         return loss
 
+
+    # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
     def convert_ordinal_to_binary(y, n):
         y = np.asarray(y).astype(int)
