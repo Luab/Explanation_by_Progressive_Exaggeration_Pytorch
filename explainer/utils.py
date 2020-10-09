@@ -5,26 +5,31 @@ import torch
 
 
 class ConditionalBatchNorm2d(pl.LightningModule):
-    def __init__(self):
+    """
+    One by one implementation of ConditionalBatchNorm from tf repo
+    """
+    def __init__(self, input_shape: int, num_classes: int):
+        """
+        Creates 2 type of variables for y is None and y is not None
+        :param input_shape: it is x.shape[-1], we need to know it in at compile-time, I think we could guess it in debugging
+        :param num_classes: NUmber of outputting features
+        """
         super().__init__()
 
-    def forward(self, x, y=None, n_bins=None):
-        if y is None:
-            beta = nn.init.constant(torch.empty([x.shape[1]]), 0.)
-            gamma = nn.init.constant(torch.empty([x.shape[1]]), 1.)
-        else:
-            beta = nn.init.constant(torch.empty([n_bins, x.shape[1]]), 0.)
-            gamma = nn.init.constant(torch.empty([n_bins, x.shape[1]]), 1.)
+        self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
+        self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
 
-            # beta, gamma = torch.index_select(beta, index=y), torch.select(gamma, index=y)
-            beta_embedding, gamma_embedding = nn.Embedding.from_pretrained(beta), nn.Embedding.from_pretrained(gamma)
-            beta, gamma = beta_embedding(y), gamma_embedding(y)
-            beta = torch.reshape(beta, shape=[-1, x.shape[1], 1, 1])
-            gamma = torch.reshape(gamma, shape=[-1, x.shape[1], 1, 1])
+        self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
+        self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
 
-        batch_mean = torch.mean(x, dim=[0, 2, 3], keepdim=True)
+    def forward(self, x, y=None):
+        if y is not None:
+            self.beta1, self.gamma1 = torch.index_select(self.beta2, 0, y), torch.index_select(self.gamma2, 0, y)
 
-        #   TODO finish Conditional Batch Notmalization module
+        batch_mean, batch_var = torch.mean(x, dim=[0, 2, 3], keepdim=True), torch.var(x, dim=[0, 2, 3], keepdim=True)
+
+
+
 
 
 class Upsampling(pl.LightningModule):

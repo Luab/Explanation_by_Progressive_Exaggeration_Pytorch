@@ -42,7 +42,7 @@ class DataModule(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
         
-        self.image_dir = config['image_dir']
+        self.image_dir = './data/CelebA/images/'
         self.data_path = config['image_label_dict']
         self.batch_size = config['batch_size']
         
@@ -60,10 +60,12 @@ class DataModule(pl.LightningModule):
             DataModule.CustomNormalize()
         ])
 
-        data = pd.read_csv(self.data_path)
+        self.data = pd.read_csv(self.data_path)
 
-        train_data, val_data = train_test_split(data, test_size=0.33, random_state=4)
-
+        train_data, val_data = train_test_split(self.data, test_size=0.33, random_state=4)
+        train_data.index = range(len(train_data))
+        val_data.index = range(len(val_data))
+        
         self.train_dataset = DataModule._Dataset(train_data, self.image_dir, self.transforms)
         self.val_dataset = DataModule._Dataset(val_data, self.image_dir, self.transforms)
 
