@@ -87,15 +87,15 @@ class Explainer(pl.LightningModule):
         g_loss_cyc = F.l1_loss(x_source, fake_source_img)
 
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
-        fake_img_cls_prediction = F.binary_cross_entropy_with_logits(fake_img_cls_logit_pretrained)
+        fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
         fake_q = fake_img_cls_prediction[:, self.target_class]
         real_p = torch.tensor(y_target, dtype=torch.float32) * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
 
         real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
-        real_img_recons_cls_prediction = F.binary_cross_entropy_with_logits(real_img_recons_cls_logit_pretrained)
+        real_img_recons_cls_prediction = torch.sigmoid(real_img_recons_cls_logit_pretrained)
         real_img_cls_logits_pretrained = self.model(x_source)
-        real_img_cls_prediction = F.binary_cross_entropy_with_logits(real_img_cls_logits_pretrained)
+        real_img_cls_prediction = torch.sigmoid(real_img_cls_logits_pretrained)
         recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(
             real_img_recons_cls_prediction[:, self.target_class]) + (
                                         1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(
