@@ -11,10 +11,8 @@ import os
 #   References:
 #   https://github.com/PyTorchLightning/PyTorch-Lightning-Bolts/blob/master/pl_bolts/models/gans/basic/basic_gan_module.py
 class Explainer(pl.LightningModule):
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         super().__init__()
-
-        self.logger = logger
 
         self.batch_size = config['batch_size']
         self.epochs = config['epochs']
@@ -33,8 +31,9 @@ class Explainer(pl.LightningModule):
         self.D = Discriminator()
 
         self.model = DenseNet121(config)
-        cls_ckpt_path = os.path.join(config['cls_experiment'], 'model.ckpt')
-        self.model.load_state_dict(torch.load(cls_ckpt_path))
+        cls_ckpt_path = os.path.join(config['cls_experiment'], 'last.ckpt')
+        cls_ckpt = torch.load(cls_ckpt_path)
+        self.model.load_state_dict(cls_ckpt['state_dict'])
         self.model.eval()
 
     def forward(self, x, y):

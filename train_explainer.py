@@ -37,7 +37,7 @@ def main():
 
     trainer = pl.Trainer(gpus=1, logger=logger, max_epochs=explainer.epochs, checkpoint_callback=checkpoint_callback)
 
-    trainer.fit(explainer, train_loader)
+    trainer.fit(explainer, train_loader, val_loader)
 
 
 if __name__ == '__main__':
