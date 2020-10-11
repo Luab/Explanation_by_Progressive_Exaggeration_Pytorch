@@ -33,9 +33,9 @@ class ConditionalBatchNorm2d(pl.LightningModule):
 
 
 class Upsampling(pl.LightningModule):
-    def __init__(self, scale_factor, mode):
+    def __init__(self, scale_factor):
         super().__init__()
-        self.upsampling = nn.Upsample(scale_factor, mode)
+        self.upsampling = nn.Upsample(scale_factor)
 
     def forward(self, x):
         x = self.upsampling(x)
@@ -147,7 +147,7 @@ class GeneratorResblock(pl.LightningModule):
         self.identity = nn.Identity()
         self.bn1 = nn.BatchNorm2d(num_features=in_channels)
         self.relu = nn.ReLU()
-        self.upsampling = Upsampling(scale_factor=2, mode='nearest')
+        self.upsampling = Upsampling(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.bn2 = nn.BatchNorm2d(num_features=out_channels)
@@ -219,7 +219,7 @@ class SpectralConv2d(pl.LightningModule):
 
         #   Assuming that stride = 1
         padding = int((kernel_size - 1) / 2)
-        self.conv = nn.Conv2d(in_channels, out_channels, padding, kernel_size, stride)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding, stride)
 
         if is_sn:
             self.conv = nn.utils.spectral_norm(self.conv)

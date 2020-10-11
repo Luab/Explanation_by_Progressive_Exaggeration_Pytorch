@@ -7,7 +7,7 @@ log_dir: './output/explainer' #address where explainer checkpoint and summaries 
 name: 'CelebA-Young-Binary' #name of the folder at the above address
 
 num_channel: 3
-num_class: 2
+num_class: 1
 #number of classes in classifier
 num_bins: 10
 #number of bins the output class probability between [0,1] is discretized into.
