@@ -28,7 +28,7 @@ class GeneratorEncoderDecoder(pl.LightningModule):
 
         self.tanh = nn.Tanh()
 
-    def forward(self, x):
+    def forward(self, x, y):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.conv1(x)
