@@ -32,13 +32,12 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.conv1(x)
-
         x = self.g_e_res_block1(x)
         x = self.g_e_res_block2(x)
         x = self.g_e_res_block3(x)
         x = self.g_e_res_block4(x)
         embedding = self.g_e_res_block5(x)
-
+        
         x = self.g_res_block1(x)
         x = self.g_res_block2(x)
         x = self.g_res_block3(x)
