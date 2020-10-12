@@ -54,11 +54,11 @@ class Downsampling(pl.LightningModule):
         #   input dimension (height or width)
         #   it is assumed that the input has the shape [batch_size, channels, height, width]
         dim_in = x.shape[2]
-
         #   padding = 'SAME'
         padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
         padding_w = int((dim_in * (self.stride[1] - 1) + self.kernel_size[1] - self.stride[1]) / 2)
-        x = F.avg_pool2d(self.kernel_size, self.stride, padding=(padding_h, padding_w), input=x)
+        x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
+        x = F.avg_pool2d(x, self.kernel_size, self.stride)
 
         return x
 
@@ -219,7 +219,7 @@ class SpectralConv2d(pl.LightningModule):
 
         #   Assuming that stride = 1
         padding = int((kernel_size - 1) / 2)
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding, stride)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
 
         if is_sn:
             self.conv = nn.utils.spectral_norm(self.conv)
