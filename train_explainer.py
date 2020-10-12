@@ -28,7 +28,7 @@ def main():
         mode='min',
     )
     logger = TensorBoardLogger(config['log_dir'], name=config['name'])
-    data_module = DataModule(config)
+    data_module = DataModule(config, from_explainer=True)
     val_loader = data_module.val_dataloader()
     train_loader = data_module.train_dataloader()
 
