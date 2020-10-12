@@ -49,13 +49,14 @@ class Explainer(pl.LightningModule):
         x_source, y_s = batch
         y_s = y_s.view(-1)
         #y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
-        y_s = F.one_hot(y_s, self.n_bins)
+        y_s = F.one_hot(y_s.long(), self.n_bins)
 
         # y_t = np.random.randint(low=0, high=self.n_bins, size=self.batch_size)
         # y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
-        y_t = torch.randint(low=0, high=self.n_bins, size=self.batch_size)
-        y_t = F.one_hot(y_s, self.n_bins)
-
+        y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
+        y_t = F.one_hot(y_t, self.n_bins)
+        
+        
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
 
@@ -66,6 +67,7 @@ class Explainer(pl.LightningModule):
 
         if optimizer_idx == 1:
             result = self.discriminator_step(x_source, y_t, y_s)
+            
 
         return result
 
@@ -81,7 +83,6 @@ class Explainer(pl.LightningModule):
         fake_source_img, fake_source_img_embedding = self(fake_target_img, y_source)
 
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
-
         fake_target_logits = self.D(fake_target_img, y_target, self.n_bins)
 
         g_loss_gan = self.generator_loss(fake_target_logits)
@@ -90,11 +91,9 @@ class Explainer(pl.LightningModule):
 
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
         fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
-        del fake_img_cls_logit_pretrained
         fake_q = fake_img_cls_prediction[:, self.target_class]
         real_p = torch.tensor(y_target, dtype=torch.float32) * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
-        del fake_q, real_p, fake_img_cls_prediction, fake_target_logits
 
         # real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
         # real_img_recons_cls_prediction = torch.sigmoid(real_img_recons_cls_logit_pretrained)
@@ -123,6 +122,7 @@ class Explainer(pl.LightningModule):
         return result
 
     def discriminator_step(self, x_source, y_t, y_s):
+        print("d")
         y_target = y_t[:, 0]
 
         real_source_logits = self.D(x_source, y_s, self.n_bins)
@@ -135,6 +135,7 @@ class Explainer(pl.LightningModule):
 
         result = pl.TrainResult(minimize=d_loss)
         result.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True)
+        print("d")
 
         return result
 
