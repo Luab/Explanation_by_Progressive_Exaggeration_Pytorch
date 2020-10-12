@@ -58,7 +58,7 @@ class Explainer(pl.LightningModule):
 
         result = None
 
-        if (batch_idx + 1) % 5 == 0 and optimizer_idx == 0:
+        if batch_idx % 5 == 0 and optimizer_idx == 0:
             result = self.generator_step(x_source, y_target, y_source)
 
         if optimizer_idx == 1:
@@ -166,10 +166,10 @@ class Explainer(pl.LightningModule):
     # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
     def convert_ordinal_to_binary(y, n):
-        y = np.asarray(y).astype(int)
-        new_y = np.zeros([y.shape[0], n])
+        y = torch.tensor(y, dtype=torch.int64)
+        new_y = torch.zeros([y.shape[-1], n])
         new_y[:, 0] = y
         for i in range(0, y.shape[0]):
             for j in range(1, y[i] + 1):
                 new_y[i, j] = 1
-        return new_y
+        return torch.tensor(new_y, dtype=torch.float64)
