@@ -37,8 +37,9 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         x = self.g_e_res_block3(x)
         x = self.g_e_res_block4(x)
         embedding = self.g_e_res_block5(x)
-        
-        x = self.g_res_block1(x)
+
+        # In original article we use embedding
+        x = self.g_res_block1(embedding)
         x = self.g_res_block2(x)
         x = self.g_res_block3(x)
         x = self.g_res_block4(x)
