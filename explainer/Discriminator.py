@@ -12,7 +12,9 @@ class Discriminator(pl.LightningModule):
         self.d_res_block2 = DiscriminatorResBlock(in_channels=64, out_channels=128)
         self.d_res_block3 = DiscriminatorResBlock(in_channels=128, out_channels=256)
         self.d_res_block4 = DiscriminatorResBlock(in_channels=256, out_channels=512)
-        self.d_res_block5 = DiscriminatorResBlock(in_channels=512, out_channels=1024, is_down=False)
+        self.d_res_block5 = DiscriminatorResBlock(in_channels=512, out_channels=1024)
+        # 6 layers, not 5
+        self.d_res_block6 = DiscriminatorResBlock(in_channels=1024, out_channels=1024)
         self.relu = nn.ReLU()
         self.global_sum_pooling = GlobalSumPooling()
         self.inner_product = InnerProduct(in_channels=1024, n_classes=2)
@@ -24,6 +26,7 @@ class Discriminator(pl.LightningModule):
         x = self.d_res_block3(x)
         x = self.d_res_block4(x)
         x = self.d_res_block5(x)
+        x = self.d_res_block6(x)
 
         x = self.relu(x)
 

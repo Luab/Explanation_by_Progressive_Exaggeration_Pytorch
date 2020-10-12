@@ -88,7 +88,9 @@ class Downsampling(pl.LightningModule):
         #   padding = 'SAME'
         padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
         padding_w = int((dim_in * (self.stride[1] - 1) + self.kernel_size[1] - self.stride[1]) / 2)
-        x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
+        # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
+        # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность, потом предыдущую
+        x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
         x = F.avg_pool2d(x, self.kernel_size, self.stride)
 
         return x
@@ -113,7 +115,7 @@ class InnerProduct(pl.LightningModule):
     def __init__(self, in_channels, n_classes):
         super().__init__()
 
-        self.v = nn.init.xavier_uniform(torch.empty(size=[n_classes, in_channels]))
+        self.v = nn.init.xavier_uniform_(torch.empty(size=[n_classes, in_channels]))
 
     def forward(self, x, y):
         self.v = self.v.transpose(0, 1)
