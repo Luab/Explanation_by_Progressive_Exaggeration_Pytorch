@@ -74,36 +74,36 @@ class Upsampling(pl.LightningModule):
         return x
 
 
-# class Downsampling(pl.LightningModule):
-#     def __init__(self, kernel_size, stride):
-#         super().__init__()
-#
-#         self.kernel_size = kernel_size
-#         self.stride = stride
-#
-#     def forward(self, x):
-#         #   input dimension (height or width)
-#         #   it is assumed that the input has the shape [batch_size, channels, height, width]
-#         dim_in = x.shape[2]
-#         #   padding = 'SAME'
-#         padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
-#         padding_w = int((dim_in * (self.stride[1] - 1) + self.kernel_size[1] - self.stride[1]) / 2)
-#         # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
-#         # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность, потом предыдущую
-#         x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
-#         x = F.avg_pool2d(x, self.kernel_size, self.stride)
-#
-#         return x
-
-
 class Downsampling(pl.LightningModule):
     def __init__(self, kernel_size, stride):
         super().__init__()
 
+        self.kernel_size = kernel_size
+        self.stride = stride
+
     def forward(self, x):
+        #   input dimension (height or width)
+        #   it is assumed that the input has the shape [batch_size, channels, height, width]
         dim_in = x.shape[2]
-        pad = dim_in//2 if dim_in % 2 == 0 else (dim_in + 1) // 2
-        return F.avg_pool2d(x, 2, 2, pad)
+        #   padding = 'SAME'
+        padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
+        padding_w = int((dim_in * (self.stride[1] - 1) + self.kernel_size[1] - self.stride[1]) / 2)
+        # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
+        # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность, потом предыдущую
+        x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
+        x = F.avg_pool2d(x, self.kernel_size, self.stride)
+
+        return x
+
+
+# class Downsampling(pl.LightningModule):
+#     def __init__(self, kernel_size, stride):
+#         super().__init__()
+
+#     def forward(self, x):
+#         dim_in = x.shape[2]
+#         pad = dim_in//2 if dim_in % 2 == 0 else (dim_in + 1) // 2
+#         return F.avg_pool2d(x, 2, 2, pad)
 
 
 class Dense(pl.LightningModule):
