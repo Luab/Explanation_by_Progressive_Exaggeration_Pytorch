@@ -97,7 +97,7 @@ class Upsampling(pl.LightningModule):
 
 
 class Downsampling(pl.LightningModule):
-    def __init__(self, temp_a, temp_b):
+    def __init__(self, kernel_size, stride):
         super().__init__()
 
     def forward(self, x):
