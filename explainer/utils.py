@@ -8,6 +8,27 @@ class ConditionalBatchNorm2d(pl.LightningModule):
     """
     One by one implementation of ConditionalBatchNorm from tf repo
     """
+
+    class EMA:
+        """
+        Exponential moving average: we use it in order not to have big loss jumps
+        Reference: https://en.wikipedia.org/wiki/Moving_average
+        """
+        def __init__(self):
+            self.last_value = None
+            self.coef = 0.5
+
+        def __call__(self, x):
+            if self.last_value is None:
+                # May be detach is not needed, if we clone tensor
+                self.last_value = x.clone().detach()
+                return x
+            else:
+                temp = self.coef * x + (1 - self.coef) * self.last_value
+                # May be detach is not needed, if we clone tensor
+                self.last_value = temp.clone().detach()
+                return temp
+
     def __init__(self, input_shape: int, num_classes: int):
         """
         Creates 2 type of variables for y is None and y is not None
@@ -15,6 +36,12 @@ class ConditionalBatchNorm2d(pl.LightningModule):
         :param num_classes: NUmber of outputting features
         """
         super().__init__()
+
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+
+        self.ema_mean = ConditionalBatchNorm2d.EMA()
+        self.ema_var = ConditionalBatchNorm2d.EMA()
 
         self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
         self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
@@ -24,12 +51,16 @@ class ConditionalBatchNorm2d(pl.LightningModule):
 
     def forward(self, x, y=None):
         if y is not None:
-            self.beta1, self.gamma1 = torch.index_select(self.beta2, 0, y), torch.index_select(self.gamma2, 0, y)
+            self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
+            self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
 
         batch_mean, batch_var = torch.mean(x, dim=[0, 2, 3], keepdim=True), torch.var(x, dim=[0, 2, 3], keepdim=True)
 
+        mean, var = self.ema_mean(batch_mean), self.ema_var(batch_var)
 
+        normalized = F.batch_norm(x, mean, var, self.beta1, self.gamma1, eps=1e-3)
 
+        return normalized
 
 
 class Upsampling(pl.LightningModule):
