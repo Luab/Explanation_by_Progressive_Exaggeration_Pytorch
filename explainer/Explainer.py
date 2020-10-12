@@ -48,10 +48,13 @@ class Explainer(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         x_source, y_s = batch
         y_s = y_s.view(-1)
-        y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
+        #y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
+        y_s = F.one_hot(y_s, self.n_bins)
 
-        y_t = np.random.randint(low=0, high=self.n_bins, size=self.batch_size)
-        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+        # y_t = np.random.randint(low=0, high=self.n_bins, size=self.batch_size)
+        # y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+        y_t = torch.randint(low=0, high=self.n_bins, size=self.batch_size)
+        y_t = F.one_hot(y_s, self.n_bins)
 
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
@@ -87,19 +90,29 @@ class Explainer(pl.LightningModule):
 
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
         fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
+        del fake_img_cls_logit_pretrained
         fake_q = fake_img_cls_prediction[:, self.target_class]
         real_p = torch.tensor(y_target, dtype=torch.float32) * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
+        del fake_q, real_p, fake_img_cls_prediction, fake_target_logits
 
+        # real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
+        # real_img_recons_cls_prediction = torch.sigmoid(real_img_recons_cls_logit_pretrained)
+        # real_img_cls_logits_pretrained = self.model(x_source)
+        # real_img_cls_prediction = torch.sigmoid(real_img_cls_logits_pretrained)
+        # recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(
+        #     real_img_recons_cls_prediction[:, self.target_class]) + (
+        #                                 1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(
+        #     1 - real_img_recons_cls_prediction[:, self.target_class]) #  F.binary_cross_entropy
+        # recons_evaluation -= torch.mean(recons_evaluation) # May be =, not -=?
+
+        # Переписал с использованием binary_cross_entropy_with_logits, мб меньше памяти будет жрать
         real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
-        real_img_recons_cls_prediction = torch.sigmoid(real_img_recons_cls_logit_pretrained)
         real_img_cls_logits_pretrained = self.model(x_source)
-        real_img_cls_prediction = torch.sigmoid(real_img_cls_logits_pretrained)
-        recons_evaluation = real_img_cls_prediction[:, self.target_class] * torch.log(
-            real_img_recons_cls_prediction[:, self.target_class]) + (
-                                        1 - real_img_recons_cls_prediction[:, self.target_class]) * torch.log(
-            1 - real_img_recons_cls_prediction[:, self.target_class]) #  F.binary_cross_entropy
-        recons_evaluation -= torch.mean(recons_evaluation) # May be =, not -=?
+        recons_evaluation = F.binary_cross_entropy_with_logits(
+            real_img_recons_cls_logit_pretrained[:, self.target_class],
+            real_img_cls_logits_pretrained[:, self.target_class]
+        )
 
         g_loss = g_loss_gan * self.lambda_gan + g_loss_rec * self.lambda_cyc + g_loss_cyc * self.lambda_cyc + fake_evaluation * self.lambda_cls + recons_evaluation * self.lambda_cls
 
