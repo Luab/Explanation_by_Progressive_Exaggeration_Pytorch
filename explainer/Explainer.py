@@ -14,7 +14,8 @@ class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
 
-        self.batch_size = config['batch_size']
+        # self.batch_size = config['batch_size']
+        self.batch_size = 2
         self.epochs = config['epochs']
         self.channels = config['num_channel']
         self.input_size = config['input_size']
@@ -48,15 +49,11 @@ class Explainer(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         x_source, y_s = batch
         y_s = y_s.view(-1)
-        #y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
-        y_s = F.one_hot(y_s.long(), self.n_bins)
-
-        # y_t = np.random.randint(low=0, high=self.n_bins, size=self.batch_size)
-        # y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+        y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
+        
         y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
-        y_t = F.one_hot(y_t, self.n_bins)
-        
-        
+        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+             
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
 
