@@ -75,19 +75,19 @@ class Upsampling(pl.LightningModule):
 
 
 class Downsampling(pl.LightningModule):
-    def __init__(self, kernel_size, stride):
+    def __init__(self):
         super().__init__()
 
-        self.kernel_size = kernel_size
-        self.stride = stride
+        self.kernel_size = 2
+        self.stride = 2
 
     def forward(self, x):
         #   input dimension (height or width)
         #   it is assumed that the input has the shape [batch_size, channels, height, width]
         dim_in = x.shape[2]
         #   padding = 'SAME'
-        padding_h = int((dim_in * (self.stride[0] - 1) + self.kernel_size[0] - self.stride[0]) / 2)
-        padding_w = int((dim_in * (self.stride[1] - 1) + self.kernel_size[1] - self.stride[1]) / 2)
+        padding_h = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
+        padding_w = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
         # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
         # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность, потом предыдущую
         x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
@@ -98,7 +98,7 @@ class Downsampling(pl.LightningModule):
 
 # class Downsampling(pl.LightningModule):
 #     def __init__(self, kernel_size, stride):
-#         super().__init__()
+#         super().__init__()    
 
 #     def forward(self, x):
 #         dim_in = x.shape[2]
@@ -156,7 +156,7 @@ class GeneratorEncoderResblock(pl.LightningModule):
         self.identity = nn.Identity()
         self.bn1 = nn.BatchNorm2d(num_features=in_channels)
         self.relu = nn.ReLU()
-        self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
+        self.downsampling = Downsampling()
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.bn2 = nn.BatchNorm2d(num_features=out_channels)
@@ -231,7 +231,7 @@ class DiscriminatorResBlock(pl.LightningModule):
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=1,
                                             is_sn=is_sn)
-        self.downsampling = Downsampling(kernel_size=(1, 2), stride=(1, 2))
+        self.downsampling = Downsampling()
 
     def forward(self, x):
         temp = self.identity(x)
