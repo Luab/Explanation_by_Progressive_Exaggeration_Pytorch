@@ -63,17 +63,6 @@ class ConditionalBatchNorm2d(pl.LightningModule):
         return normalized
 
 
-class Upsampling(pl.LightningModule):
-    def __init__(self, scale_factor):
-        super().__init__()
-        self.upsampling = nn.Upsample(scale_factor)
-
-    def forward(self, x):
-        x = self.upsampling(x)
-
-        return x
-
-
 class Downsampling(pl.LightningModule):
     def __init__(self):
         super().__init__()
@@ -190,7 +179,7 @@ class GeneratorResblock(pl.LightningModule):
         self.identity = nn.Identity()
         self.bn1 = nn.BatchNorm2d(num_features=in_channels)
         self.relu = nn.ReLU()
-        self.upsampling = Upsampling(scale_factor=2)
+        self.upsampling = nn.Upsample(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.bn2 = nn.BatchNorm2d(num_features=out_channels)
