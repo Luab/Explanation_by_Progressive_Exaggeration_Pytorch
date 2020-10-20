@@ -38,7 +38,7 @@ class Discriminator(pl.LightningModule):
             else:
                 temp += self.inner_product(x, y[:, i + 1])
 
-        x = self.dense(x, 1, is_sn=True)
+        x = self.dense(x)
 
         x += temp
 
