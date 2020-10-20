@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import os
+import subprocess as sp
 
 
 #   References:
@@ -14,8 +15,7 @@ class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
 
-        # self.batch_size = config['batch_size']
-        self.batch_size = 2
+        self.batch_size = config['batch_size']
         self.epochs = config['epochs']
         self.channels = config['num_channel']
         self.input_size = config['input_size']
@@ -28,7 +28,7 @@ class Explainer(pl.LightningModule):
         self.save_summary = int(config['save_summary'])
         self.ckpt_dir_continue = config['ckpt_dir_continue']
 
-        self.G = GeneratorEncoderDecoder()
+        self.G = GeneratorEncoderDecoder(self.n_bins)
         self.D = Discriminator()
 
         self.model = DenseNet121(config)
@@ -36,9 +36,18 @@ class Explainer(pl.LightningModule):
         cls_ckpt = torch.load(cls_ckpt_path)
         self.model.load_state_dict(cls_ckpt['state_dict'])
         self.model.eval()
+    
+    def get_gpu_memory(self):
+        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
 
-    def forward(self, x, y):
-        return self.G(x, y)
+        ACCEPTABLE_AVAILABLE_MEMORY = 1024
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
+        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+        return memory_free_values[0]
+    
+    def forward(self, x):
+        return self.G(x)
 
     def configure_optimizers(self):
         g_opt = torch.optim.Adam(params=self.G.parameters(), lr=0.0002, betas=(0., 0.9))
@@ -61,9 +70,11 @@ class Explainer(pl.LightningModule):
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
             result = self.generator_step(x_source, y_target, y_source)
+            print('Free GPU memory after generator training step: {} MB\n'.format(self.get_gpu_memory()))
 
         if optimizer_idx == 1:
             result = self.discriminator_step(x_source, y_t, y_s)
+            print('Free GPU memory after discriminator training step: {} MB\n'.format(self.get_gpu_memory()))
             
 
         return result
@@ -73,14 +84,26 @@ class Explainer(pl.LightningModule):
 
     #   I suppose that we do not need validation_step
     def generator_step(self, x_source, y_target, y_source):
-
-        #   TODO implement conditional batch norm!!!
+        print('Free GPU memory before generator training step: {} MB'.format(self.get_gpu_memory()))
+        
+        print('fake_target_img, fake_target_img_embedding calculating...')
         fake_target_img, fake_target_img_embedding = self(x_source, y_target)
+        print('Free GPU memory after fake_target_img, fake_target_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        
+        print('fake_source_recons_img, x_source_img_embedding calculating...')
         fake_source_recons_img, x_source_img_embedding = self(x_source, y_source)
+        print('Free GPU memory after fake_source_recons_img, x_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        
+        print('fake_source_img, fake_source_img_embedding calculating...')
         fake_source_img, fake_source_img_embedding = self(fake_target_img, y_source)
-
+        print('Free GPU memory after fake_source_img, fake_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        
+        print('g_loss_rec calculating...')
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
+        print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        
         fake_target_logits = self.D(fake_target_img, y_target, self.n_bins)
+        print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
 
         g_loss_gan = self.generator_loss(fake_target_logits)
 
