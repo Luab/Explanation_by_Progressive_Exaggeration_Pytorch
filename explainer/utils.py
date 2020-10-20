@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 import torch.nn as nn
 import torch.nn.functional as F
+import subprocess as sp
 import torch
 
 
@@ -139,6 +140,15 @@ class GlobalSumPooling(pl.LightningModule):
 
 
 class GeneratorEncoderResblock(pl.LightningModule):
+    def get_gpu_memory(self):
+        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
+
+        ACCEPTABLE_AVAILABLE_MEMORY = 1024
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
+        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+        return memory_free_values[0]
+    
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
 
@@ -154,25 +164,46 @@ class GeneratorEncoderResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
+        print('\n\t\tGeneratorEncoderResblock')
         temp = self.identity(x)
-
+        
+        print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn1(x)
+        print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
+        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.downsampling(x)
+        print('\t\tFree GPU memory after  x = self.downsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
+        print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
+        print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
+        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
+        print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.downsampling(temp)
+        print('\t\tFree GPU memory after  temp = self.downsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
+        print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
 
         x += temp
-
+        print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
+        
         return x
 
 
 class GeneratorResblock(pl.LightningModule):
+    def get_gpu_memory(self):
+        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
+
+        ACCEPTABLE_AVAILABLE_MEMORY = 1024
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
+        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+        return memory_free_values[0]
+    
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
 
@@ -188,20 +219,33 @@ class GeneratorResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
+        print('\n\t\tGeneratorResblock')
+        
         temp = self.identity(x)
-
+        print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
+        
         x = self.bn1(x)
+        print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
+        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.upsampling(x)
+        print('\t\tFree GPU memory after  x = self.upsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
+        print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
+        print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
+        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
+        print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.upsampling(temp)
+        print('\t\tFree GPU memory after  temp = self.upsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
+        print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
 
         x += temp
+        print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
 
         return x
 
@@ -237,9 +281,9 @@ class DiscriminatorResBlock(pl.LightningModule):
 
             if self.is_first:
                 temp = self.downsampling(temp)
-                temp = self.conv3(temp)
+                temp = self.conv_identity(temp)
             else:
-                temp = self.conv3(temp)
+                temp = self.conv_identity(temp)
                 temp = self.downsampling(temp)
 
         return x + temp
