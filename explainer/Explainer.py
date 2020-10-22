@@ -29,7 +29,7 @@ class Explainer(pl.LightningModule):
         self.ckpt_dir_continue = config['ckpt_dir_continue']
 
         self.G = GeneratorEncoderDecoder(self.n_bins)
-        self.D = Discriminator()
+        self.D = Discriminator(self.n_bins)
 
         self.model = DenseNet121(config)
         cls_ckpt_path = os.path.join(config['cls_experiment'], 'last.ckpt')
@@ -102,7 +102,7 @@ class Explainer(pl.LightningModule):
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
         print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
-        fake_target_logits = self.D(fake_target_img, y_target, self.n_bins)
+        fake_target_logits = self.D(fake_target_img, y_target)
         print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
 
         g_loss_gan = self.generator_loss(fake_target_logits)
@@ -145,9 +145,9 @@ class Explainer(pl.LightningModule):
         print("d")
         y_target = y_t[:, 0]
 
-        real_source_logits = self.D(x_source, y_s, self.n_bins)
+        real_source_logits = self.D(x_source, y_s)
         fake_target_img, fake_target_img_embedding = self(x_source, y_target)
-        fake_target_logits = self.D(fake_target_img, y_t, self.n_bins)
+        fake_target_logits = self.D(fake_target_img, y_t)
 
         d_loss_gan = self.discriminator_loss(real_source_logits, fake_target_logits)
 
