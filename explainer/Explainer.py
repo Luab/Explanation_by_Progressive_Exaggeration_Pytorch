@@ -46,7 +46,7 @@ class Explainer(pl.LightningModule):
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
     
-    def forward(self, x):
+    def forward(self, x, y):
         return self.G(x)
 
     def configure_optimizers(self):
@@ -65,6 +65,7 @@ class Explainer(pl.LightningModule):
              
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
+        print("y_source:", y_target.size())
 
         result = None
 
