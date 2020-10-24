@@ -23,7 +23,7 @@ class Discriminator(pl.LightningModule):
     
      #  Here I deleted y argument in def forward
      #  TODO need to repair! add y argument (and fix inner-product function) and evaluate the total size
-    def forward(self, x):
+    def forward(self, x, y):
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
         x = self.d_res_block3(x)
@@ -35,11 +35,14 @@ class Discriminator(pl.LightningModule):
 
         x = self.global_sum_pooling(x)
 
-        # for i in range(0, self.n_bins - 1):
-            # if i == 0:
-                # temp = self.inner_product(x, y[:, i + 1])
-            # else:
-                # temp += self.inner_product(x, y[:, i + 1])
+        for i in range(0, self.n_bins - 1):
+            if i == 0:
+                temp = self.inner_product(x, y[:, i + 1])
+            else:
+                temp += self.inner_product(x, y[:, i + 1])
+                
+#         for i in range(0, self.n_bins - 1):
+#             temp = self.inner_product(x, y[:, i + 1])
 
         x = x.view(-1, 1024)
         x = self.fc(x)
