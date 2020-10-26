@@ -88,7 +88,7 @@ class Downsampling(pl.LightningModule):
 
 # class Downsampling(pl.LightningModule):
 #     def __init__(self, kernel_size, stride):
-#         super().__init__()    
+#         super().__init__()
 
 #     def forward(self, x):
 #         dim_in = x.shape[2]
@@ -111,23 +111,44 @@ class Dense(pl.LightningModule):
         return x
 
 
+# class InnerProduct(pl.LightningModule):
+#     def __init__(self, in_channels, n_classes):
+#         super().__init__()
+#
+#         self.v = nn.init.xavier_uniform_(torch.empty(size=[n_classes, in_channels]))
+#
+#     def forward(self, x, y):
+#         self.v = self.v.transpose(0, 1)
+#         self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
+#
+#         temp = nn.Embedding.from_pretrained(embeddings=self.v)(y)
+#
+#         # temp = torch.index_select(self.v, dim=0, index=y)
+#         temp = torch.sum(temp * x, 1, keepdim=True)
+#
+#         return temp
+
 class InnerProduct(pl.LightningModule):
     def __init__(self, in_channels, n_classes):
         super().__init__()
 
-        self.v = nn.init.xavier_uniform_(torch.empty(size=[n_classes, in_channels]))
+        # nn.utils.spectral_norm inputs a layer, I wrapped v into Linear
+        # I can not assign 2 spectral norm twice (python throws an Error, that's why I took it to __init__
+        self.dense = nn.Linear(in_channels, bias=False)
+        nn.init.xavier_uniform_(self.dense.weight)
+        self.dense = nn.utils.spectral_norm(self.dense)
 
     def forward(self, x, y):
-        self.v = self.v.transpose(0, 1)
-        self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
+        print("x shape:", x.size())
 
-        temp = nn.Embedding.from_pretrained(embeddings=self.v)(y)
+        # Cast y to long(), index should be int.
+        temp = torch.index_select(self.dense.weight, dim=0, index=y.long())
+        print("size from index_select:", temp.size())
 
-        # temp = torch.index_select(self.v, dim=0, index=y)
         temp = torch.sum(temp * x, 1, keepdim=True)
+        print("size after sum:", temp.size())
 
         return temp
-
 
 class GlobalSumPooling(pl.LightningModule):
     def __init__(self):
