@@ -134,19 +134,29 @@ class InnerProduct(pl.LightningModule):
 
         # nn.utils.spectral_norm inputs a layer, I wrapped v into Linear
         # I can not assign 2 spectral norm twice (python throws an Error, that's why I took it to __init__
-        self.dense = nn.Linear(in_channels, bias=False)
-        nn.init.xavier_uniform_(self.dense.weight)
-        self.dense = nn.utils.spectral_norm(self.dense)
+        # self.dense = nn.Linear(in_channels, n_classes, bias=False)
+        # nn.init.xavier_uniform_(self.dense.weight)
+        # self.dense = nn.utils.spectral_norm(self.dense)
+
+        self.embedding = torch.nn.Embedding(n_classes, in_channels)
+        self.embedding = torch.nn.utils.spectral_norm(self.embedding)
+
 
     def forward(self, x, y):
-        print("x shape:", x.size())
+        #print("Input inner product x shape:", x.size())
 
         # Cast y to long(), index should be int.
-        temp = torch.index_select(self.dense.weight, dim=0, index=y.long())
-        print("size from index_select:", temp.size())
+        temp = self.embedding(y.long())
+        #print("temp size from index_select:", temp.size())
 
-        temp = torch.sum(temp * x, 1, keepdim=True)
-        print("size after sum:", temp.size())
+        x = x.squeeze() # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
+
+        print("x shape:", x.size())
+        print("temp shape:", temp.size())
+
+        temp = temp + x
+        # print(temp.size(), "should be [n, 1024]")
+        #print("temp size after sum:", temp.size())
 
         return temp
 
