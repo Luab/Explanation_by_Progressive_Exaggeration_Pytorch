@@ -19,9 +19,9 @@ def get_gpu_memory():
 
 #   TODO synchronize path with saved models with path for saving in config file
 def main():
-    print('***************************')
-    print(get_gpu_memory())
-    print('***************************')
+    # print('***************************')
+    # print(get_gpu_memory())
+    # print('***************************')
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', default='configs/celebA_Young_Explainer.yaml')
