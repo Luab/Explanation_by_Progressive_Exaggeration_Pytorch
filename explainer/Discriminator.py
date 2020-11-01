@@ -35,18 +35,18 @@ class Discriminator(pl.LightningModule):
         x = self.relu(x)
 
         x = self.global_sum_pooling(x)
-        print(x.size(), 'should be [n, 1024, 1, 1]')
+        # print(x.size(), 'should be [n, 1024, 1, 1]')
 
         for i in range(0, self.n_bins - 1):
             if i == 0:
                 temp = self.inner_product(x, y[:, i + 1])
-                print("inner shape:", temp.size(), " should be [n, 1024]")
+                # print("inner shape:", temp.size(), " should be [n, 1024]")
             else:
                 temp += self.inner_product(x, y[:, i + 1])
 
         x = x.view(-1, 1024)
         x = self.fc(x)
-        print("Dense shape:", x.size())
+        # print("Dense shape:", x.size())
 
         x = temp + x
 
