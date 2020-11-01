@@ -52,8 +52,9 @@ class ConditionalBatchNorm2d(pl.LightningModule):
 
     def forward(self, x, y=None):
         if y is not None:
-            self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
-            self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
+            print(y.shape)
+            self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y.cpu()), [-1, 1, 1, self.input_shape])
+            self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y.cpu()), [-1, 1, 1, self.input_shape])
 
         batch_mean, batch_var = torch.mean(x, dim=[0, 2, 3], keepdim=True), torch.var(x, dim=[0, 2, 3], keepdim=True)
 
@@ -151,8 +152,8 @@ class InnerProduct(pl.LightningModule):
 
         x = x.squeeze() # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
 
-        print("x shape:", x.size())
-        print("temp shape:", temp.size())
+        # print("x shape:", x.size())
+        # print("temp shape:", temp.size())
 
         temp = temp + x
         # print(temp.size(), "should be [n, 1024]")
@@ -195,32 +196,32 @@ class GeneratorEncoderResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
-        print('\n\t\tGeneratorEncoderResblock')
+        # print('\n\t\tGeneratorEncoderResblock')
         temp = self.identity(x)
         
-        print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn1(x)
-        print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.downsampling(x)
-        print('\t\tFree GPU memory after  x = self.downsampling(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.downsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
-        print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
-        print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
-        print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.downsampling(temp)
-        print('\t\tFree GPU memory after  temp = self.downsampling(temp): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.downsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
-        print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
 
         x += temp
-        print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
         
         return x
 
@@ -250,33 +251,33 @@ class GeneratorResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
-        print('\n\t\tGeneratorResblock')
+        # print('\n\t\tGeneratorResblock')
         
         temp = self.identity(x)
-        print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
         
         x = self.bn1(x)
-        print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.upsampling(x)
-        print('\t\tFree GPU memory after  x = self.upsampling(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.upsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
-        print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
-        print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
-        print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.upsampling(temp)
-        print('\t\tFree GPU memory after  temp = self.upsampling(temp): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.upsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
-        print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
 
         x += temp
-        print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
+        # print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
 
         return x
 
