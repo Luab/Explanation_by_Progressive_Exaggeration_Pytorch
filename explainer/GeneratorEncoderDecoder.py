@@ -39,10 +39,12 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         return memory_free_values[0]
     
     def forward(self, x, y):
-        y = y.squeeze().long()  # TODO delete it after summary
+        y = y.long()  # TODO delete it after summary
+        print('y-type: {}'.format(y.dtype))
 
-        print("\n\tGeneratorEncoderDecoder")
         # print('\tFree GPU memory before forward propagation: {} MB'.format(self.get_gpu_memory()))
+        print('In Generator, x-shape: {}'.format(x.shape))
+        print('In Generator, y-shape: {}'.format(y.shape))
         x = self.bn1(x, y)
         # print('\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)

@@ -47,7 +47,7 @@ class Explainer(pl.LightningModule):
         return memory_free_values[0]
     
     def forward(self, x, y):
-        return self.G(x)
+        return self.G(x, y)
 
     def configure_optimizers(self):
         g_opt = torch.optim.Adam(params=self.G.parameters(), lr=0.0002, betas=(0., 0.9))
@@ -85,26 +85,26 @@ class Explainer(pl.LightningModule):
 
     #   I suppose that we do not need validation_step
     def generator_step(self, x_source, y_target, y_source):
-        print('Free GPU memory before generator training step: {} MB'.format(self.get_gpu_memory()))
+        # print('Free GPU memory before generator training step: {} MB'.format(self.get_gpu_memory()))
         
-        print('fake_target_img, fake_target_img_embedding calculating...')
+        # print('fake_target_img, fake_target_img_embedding calculating...')
         fake_target_img, fake_target_img_embedding = self(x_source, y_target)
-        print('Free GPU memory after fake_target_img, fake_target_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        # print('Free GPU memory after fake_target_img, fake_target_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
-        print('fake_source_recons_img, x_source_img_embedding calculating...')
+        # print('fake_source_recons_img, x_source_img_embedding calculating...')
         fake_source_recons_img, x_source_img_embedding = self(x_source, y_source)
-        print('Free GPU memory after fake_source_recons_img, x_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        # print('Free GPU memory after fake_source_recons_img, x_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
-        print('fake_source_img, fake_source_img_embedding calculating...')
+        # print('fake_source_img, fake_source_img_embedding calculating...')
         fake_source_img, fake_source_img_embedding = self(fake_target_img, y_source)
-        print('Free GPU memory after fake_source_img, fake_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        # print('Free GPU memory after fake_source_img, fake_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
-        print('g_loss_rec calculating...')
+        # print('g_loss_rec calculating...')
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
-        print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
+        # print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
         fake_target_logits = self.D(fake_target_img, y_target)
-        print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
+        # print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
 
         g_loss_gan = self.generator_loss(fake_target_logits)
 
@@ -143,7 +143,7 @@ class Explainer(pl.LightningModule):
         return result
 
     def discriminator_step(self, x_source, y_t, y_s):
-        print("d")
+        # print("d")
         y_target = y_t[:, 0]
 
         real_source_logits = self.D(x_source, y_s)
@@ -156,7 +156,7 @@ class Explainer(pl.LightningModule):
 
         result = pl.TrainResult(minimize=d_loss)
         result.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True)
-        print("d")
+        # print("d")
 
         return result
 
