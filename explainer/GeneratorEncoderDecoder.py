@@ -35,16 +35,16 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         ACCEPTABLE_AVAILABLE_MEMORY = 1024
         COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
         memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
+
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
     
     def forward(self, x, y):
-        y = y.long()  # TODO delete it after summary
-        print('y-type: {}'.format(y.dtype))
+        y = y.squeeze().long()  # TODO delete it after summary
 
         # print('\tFree GPU memory before forward propagation: {} MB'.format(self.get_gpu_memory()))
-        print('In Generator, x-shape: {}'.format(x.shape))
-        print('In Generator, y-shape: {}'.format(y.shape))
+        print('In Generator, x-shape: {}'.format(x.size()))
+        print('In Generator, y-shape: {}'.format(y.size()))
         x = self.bn1(x, y)
         # print('\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
