@@ -6,29 +6,6 @@ import torch
 
 
 class ConditionalBatchNorm2d(pl.LightningModule):
-    """
-    One by one implementation of ConditionalBatchNorm from tf repo
-    """
-
-    class EMA:
-        """
-        Exponential moving average: we use it in order not to have big loss jumps
-        Reference: https://en.wikipedia.org/wiki/Moving_average
-        """
-        def __init__(self):
-            self.last_value = None
-            self.coef = 0.5
-
-        def __call__(self, x):
-            if self.last_value is None:
-                # May be detach is not needed, if we clone tensor
-                self.last_value = x.clone().detach()
-                return x
-            else:
-                temp = self.coef * x + (1 - self.coef) * self.last_value
-                # May be detach is not needed, if we clone tensor
-                self.last_value = temp.clone().detach()
-                return temp
 
     def __init__(self, input_shape: int, num_classes: int):
         """
@@ -41,8 +18,8 @@ class ConditionalBatchNorm2d(pl.LightningModule):
         self.input_shape = input_shape
         self.num_classes = num_classes
 
-        self.ema_mean = ConditionalBatchNorm2d.EMA()
-        self.ema_var = ConditionalBatchNorm2d.EMA()
+        self.register_buffer('running_mean', torch.zeros(size=[self.input_shape]))
+        self.register_buffer('running_var', torch.ones(size=[self.input_shape]))
 
         self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
         self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
@@ -50,17 +27,36 @@ class ConditionalBatchNorm2d(pl.LightningModule):
         self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
         self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
 
+        print("added reset paramewters")
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.running_mean.zero_()
+        self.running_var.fill_(1)
+
     def forward(self, x, y=None):
         if y is not None:
-            print(y.shape)
-            self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y.cpu()), [-1, 1, 1, self.input_shape])
-            self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y.cpu()), [-1, 1, 1, self.input_shape])
+            # self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
+            # self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
+            print("BN y.shape =", y.shape, ", type(y) =", type(y))
 
-        batch_mean, batch_var = torch.mean(x, dim=[0, 2, 3], keepdim=True), torch.var(x, dim=[0, 2, 3], keepdim=True)
+            embedding_weight = nn.Embedding.from_pretrained(self.beta2)
+            embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
 
-        mean, var = self.ema_mean(batch_mean), self.ema_var(batch_var)
+            self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
+            self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
 
-        normalized = F.batch_norm(x, mean, var, self.beta1, self.gamma1, eps=1e-3)
+        print("register buffers")
+        self.running_mean, self.running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
+
+        print("God save me")
+        print("x shape:", x.size())
+        print("mean shape:", self.running_mean.size())
+        print("var shape", self.running_var.size())
+        print("beta shape", self.beta1.size())
+        print("gamma shape", self.gamma1.size())
+
+        normalized = F.batch_norm(x, self.running_mean, self.running_var, self.beta1, self.gamma1, eps=1e-3, momentum=0.5)
 
         return normalized
 
