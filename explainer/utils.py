@@ -5,7 +5,7 @@ import subprocess as sp
 import torch
 
 
-class ConditionalBatchNorm2d(pl.LightningModule):
+class ConditionalBatchNorm2d(nn.Module):
 
     def __init__(self, input_shape: int, num_classes: int):
         """
@@ -18,21 +18,11 @@ class ConditionalBatchNorm2d(pl.LightningModule):
         self.input_shape = input_shape
         self.num_classes = num_classes
 
-        self.register_buffer('running_mean', torch.zeros(size=[self.input_shape]))
-        self.register_buffer('running_var', torch.ones(size=[self.input_shape]))
-
         self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
         self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
 
         self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
         self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
-
-        print("added reset paramewters")
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.running_mean.zero_()
-        self.running_var.fill_(1)
 
     def forward(self, x, y=None):
         if y is not None:
@@ -46,17 +36,17 @@ class ConditionalBatchNorm2d(pl.LightningModule):
             self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
             self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
 
-        print("register buffers")
-        self.running_mean, self.running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
+        running_mean, running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
 
         print("God save me")
         print("x shape:", x.size())
-        print("mean shape:", self.running_mean.size())
-        print("var shape", self.running_var.size())
+        print("mean shape:", running_mean.size())
+        print("var shape", running_var.size())
         print("beta shape", self.beta1.size())
         print("gamma shape", self.gamma1.size())
 
-        normalized = F.batch_norm(x, self.running_mean, self.running_var, self.beta1, self.gamma1, eps=1e-3, momentum=0.5)
+        normalized = F.batch_norm(x, running_mean, running_var, self.beta1, self.gamma1, eps=1e-3,
+                                  momentum=0.5)
 
         return normalized
 
@@ -77,7 +67,7 @@ class Downsampling(pl.LightningModule):
         padding_w = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
         # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
         # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность с двух сторон, потом предыдущую. Или он вообще не нужен, хз
-        #x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
+        # x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
         x = F.avg_pool2d(x, self.kernel_size, self.stride)
 
         return x
@@ -138,24 +128,24 @@ class InnerProduct(pl.LightningModule):
         self.embedding = torch.nn.Embedding(n_classes, in_channels)
         self.embedding = torch.nn.utils.spectral_norm(self.embedding)
 
-
     def forward(self, x, y):
-        #print("Input inner product x shape:", x.size())
+        # print("Input inner product x shape:", x.size())
 
         # Cast y to long(), index should be int.
         temp = self.embedding(y.long())
-        #print("temp size from index_select:", temp.size())
+        # print("temp size from index_select:", temp.size())
 
-        x = x.squeeze() # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
+        x = x.squeeze()  # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
 
         # print("x shape:", x.size())
         # print("temp shape:", temp.size())
 
         temp = temp + x
         # print(temp.size(), "should be [n, 1024]")
-        #print("temp size after sum:", temp.size())
+        # print("temp size after sum:", temp.size())
 
         return temp
+
 
 class GlobalSumPooling(pl.LightningModule):
     def __init__(self):
@@ -176,7 +166,7 @@ class GeneratorEncoderResblock(pl.LightningModule):
         memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
-    
+
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
 
@@ -194,7 +184,7 @@ class GeneratorEncoderResblock(pl.LightningModule):
     def forward(self, x):
         # print('\n\t\tGeneratorEncoderResblock')
         temp = self.identity(x)
-        
+
         # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn1(x)
         # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
@@ -218,7 +208,7 @@ class GeneratorEncoderResblock(pl.LightningModule):
 
         x += temp
         # print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
-        
+
         return x
 
 
@@ -231,7 +221,7 @@ class GeneratorResblock(pl.LightningModule):
         memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
-    
+
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
 
@@ -248,10 +238,10 @@ class GeneratorResblock(pl.LightningModule):
 
     def forward(self, x):
         # print('\n\t\tGeneratorResblock')
-        
+
         temp = self.identity(x)
         # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
-        
+
         x = self.bn1(x)
         # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
