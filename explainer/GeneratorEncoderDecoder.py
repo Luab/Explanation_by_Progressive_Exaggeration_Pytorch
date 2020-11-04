@@ -9,7 +9,7 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         super().__init__()
 
         self.relu = nn.ReLU()
-        self.bn1 = ConditionalBatchNorm2d(input_shape=3, num_classes=n_bins)
+        self.bn1 = ConditionalBatchNorm2d(num_features=3, num_classes=n_bins)
         self.conv1 = SpectralConv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1)
 
         self.g_e_res_block1 = GeneratorEncoderResblock(in_channels=64, out_channels=128)
@@ -24,7 +24,7 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         self.g_res_block4 = GeneratorResblock(in_channels=256, out_channels=128)
         self.g_res_block5 = GeneratorResblock(in_channels=128, out_channels=64)
 
-        self.bn2 = ConditionalBatchNorm2d(input_shape=64, num_classes=n_bins)
+        self.bn2 = ConditionalBatchNorm2d(num_features=64, num_classes=n_bins)
         self.conv = SpectralConv2d(in_channels=64, out_channels=3, kernel_size=3, stride=1)
 
         self.tanh = nn.Tanh()
