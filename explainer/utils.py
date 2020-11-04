@@ -5,51 +5,125 @@ import subprocess as sp
 import torch
 
 
-class ConditionalBatchNorm2d(nn.Module):
+# class ConditionalBatchNorm2d(nn.Module):
+#
+#     def __init__(self, input_shape: int, num_classes: int):
+#         """
+#         Creates 2 type of variables for y is None and y is not None
+#         :param input_shape: it is x.shape[-1], we need to know it in at compile-time, I think we could guess it in debugging
+#         :param num_classes: NUmber of outputting features
+#         """
+#         super().__init__()
+#
+#         self.input_shape = input_shape
+#         self.num_classes = num_classes
+#
+#         self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
+#         self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
+#
+#         self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
+#         self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
+#
+#     def forward(self, x, y=None):
+#         if y is not None:
+#             # self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
+#             # self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
+#             print("BN y.shape =", y.shape, ", type(y) =", type(y))
+#
+#             embedding_weight = nn.Embedding.from_pretrained(self.beta2)
+#             embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
+#
+#             self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
+#             self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
+#
+#         running_mean, running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
+#
+#         print("God save me")
+#         print("x shape:", x.size())
+#         print("mean shape:", running_mean.size())
+#         print("var shape", running_var.size())
+#         print("beta shape", self.beta1.size())
+#         print("gamma shape", self.gamma1.size())
+#
+#         normalized = F.batch_norm(x, running_mean, running_var, self.beta1, self.gamma1, eps=1e-3,
+#                                   momentum=0.5)
+#
+#         return normalized
 
-    def __init__(self, input_shape: int, num_classes: int):
-        """
-        Creates 2 type of variables for y is None and y is not None
-        :param input_shape: it is x.shape[-1], we need to know it in at compile-time, I think we could guess it in debugging
-        :param num_classes: NUmber of outputting features
-        """
-        super().__init__()
+class ConditionalBatchNorm2dBase(nn.BatchNorm2d):
 
-        self.input_shape = input_shape
-        self.num_classes = num_classes
+    """Conditional Batch Normalization"""
 
-        self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
-        self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
+    def __init__(self, num_features, eps=1e-3, momentum=0.5,
+                 affine=False, track_running_stats=True):
+        super(ConditionalBatchNorm2dBase, self).__init__(
+            num_features, eps, momentum, affine, track_running_stats
+        )
 
-        self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
-        self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
+    def forward(self, input, weight, bias, **kwargs):
+        self._check_input_dim(input)
 
-    def forward(self, x, y=None):
+        exponential_average_factor = 0.0
+
+        if self.training and self.track_running_stats:
+            self.num_batches_tracked += 1
+            if self.momentum is None:  # use cumulative moving average
+                exponential_average_factor = 1.0 / self.num_batches_tracked.item()
+            else:  # use exponential moving average
+                exponential_average_factor = self.momentum
+
+        output = F.batch_norm(input, self.running_mean, self.running_var,
+                              self.weight, self.bias,
+                              self.training or not self.track_running_stats,
+                              exponential_average_factor, self.eps)
+        if weight.dim() == 1:
+            weight = weight.unsqueeze(0)
+        if bias.dim() == 1:
+            bias = bias.unsqueeze(0)
+        size = output.size()
+        weight = weight.unsqueeze(-1).unsqueeze(-1).expand(size)
+        bias = bias.unsqueeze(-1).unsqueeze(-1).expand(size)
+        return weight * output + bias
+
+
+class ConditionalBatchNorm2d(ConditionalBatchNorm2dBase):
+
+    def __init__(self, num_classes, num_features, eps=1e-3, momentum=0.5,
+                 affine=False, track_running_stats=True):
+        super(ConditionalBatchNorm2d, self).__init__(
+            num_features, eps, momentum, affine, track_running_stats
+        )
+
+        self.input_shape = num_features
+
+        self.weights = nn.Embedding(num_classes, num_features)
+        self.biases = nn.Embedding(num_classes, num_features)
+
+        self.beta1 = torch.zeros(size=[num_features], requires_grad=True)
+        self.gamma1 = torch.ones(size=[num_features], requires_grad=True)
+
+        self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True)
+        self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True)
+
+        self._initialize()
+
+    def _initialize(self):
+        torch.nn.init.ones_(self.weights.weight.data)
+        torch.nn.init.zeros_(self.biases.weight.data)
+
+    def forward(self, input, y, **kwargs):
+
         if y is not None:
-            # self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
-            # self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
-            print("BN y.shape =", y.shape, ", type(y) =", type(y))
-
             embedding_weight = nn.Embedding.from_pretrained(self.beta2)
             embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
 
             self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
             self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
 
-        running_mean, running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
+        weight = self.weights(y)
+        bias = self.biases(y)
 
-        print("God save me")
-        print("x shape:", x.size())
-        print("mean shape:", running_mean.size())
-        print("var shape", running_var.size())
-        print("beta shape", self.beta1.size())
-        print("gamma shape", self.gamma1.size())
-
-        normalized = F.batch_norm(x, running_mean, running_var, self.beta1, self.gamma1, eps=1e-3,
-                                  momentum=0.5)
-
-        return normalized
-
+        return super(ConditionalBatchNorm2d, self).forward(input, self.beta1, self.gamma1)
 
 class Downsampling(pl.LightningModule):
     def __init__(self):
