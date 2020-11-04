@@ -5,53 +5,7 @@ import subprocess as sp
 import torch
 
 
-# class ConditionalBatchNorm2d(nn.Module):
-#
-#     def __init__(self, input_shape: int, num_classes: int):
-#         """
-#         Creates 2 type of variables for y is None and y is not None
-#         :param input_shape: it is x.shape[-1], we need to know it in at compile-time, I think we could guess it in debugging
-#         :param num_classes: NUmber of outputting features
-#         """
-#         super().__init__()
-#
-#         self.input_shape = input_shape
-#         self.num_classes = num_classes
-#
-#         self.beta1 = torch.zeros(size=[input_shape], requires_grad=True)
-#         self.gamma1 = torch.ones(size=[input_shape], requires_grad=True)
-#
-#         self.beta2 = torch.zeros(size=[num_classes, input_shape], requires_grad=True)
-#         self.gamma2 = torch.ones(size=[num_classes, input_shape], requires_grad=True)
-#
-#     def forward(self, x, y=None):
-#         if y is not None:
-#             # self.beta1 = torch.reshape(torch.index_select(self.beta2, 0, y), [-1, 1, 1, self.input_shape])
-#             # self.gamma1 = torch.reshape(torch.index_select(self.gamma2, 0, y), [-1, 1, 1, self.input_shape])
-#             print("BN y.shape =", y.shape, ", type(y) =", type(y))
-#
-#             embedding_weight = nn.Embedding.from_pretrained(self.beta2)
-#             embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
-#
-#             self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
-#             self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
-#
-#         running_mean, running_var = torch.mean(x, dim=[0, 2, 3]), torch.var(x, dim=[0, 2, 3])
-#
-#         print("God save me")
-#         print("x shape:", x.size())
-#         print("mean shape:", running_mean.size())
-#         print("var shape", running_var.size())
-#         print("beta shape", self.beta1.size())
-#         print("gamma shape", self.gamma1.size())
-#
-#         normalized = F.batch_norm(x, running_mean, running_var, self.beta1, self.gamma1, eps=1e-3,
-#                                   momentum=0.5)
-#
-#         return normalized
-
 class ConditionalBatchNorm2dBase(nn.BatchNorm2d):
-
     """Conditional Batch Normalization"""
 
     def __init__(self, num_features, eps=1e-3, momentum=0.5,
@@ -96,34 +50,22 @@ class ConditionalBatchNorm2d(ConditionalBatchNorm2dBase):
 
         self.input_shape = num_features
 
-        self.weights = nn.Embedding(num_classes, num_features)
-        self.biases = nn.Embedding(num_classes, num_features)
-
         self.beta1 = torch.zeros(size=[num_features], requires_grad=True)
         self.gamma1 = torch.ones(size=[num_features], requires_grad=True)
 
         self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True)
         self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True)
 
-        self._initialize()
-
-    def _initialize(self):
-        torch.nn.init.ones_(self.weights.weight.data)
-        torch.nn.init.zeros_(self.biases.weight.data)
-
     def forward(self, input, y, **kwargs):
-
         if y is not None:
             embedding_weight = nn.Embedding.from_pretrained(self.beta2)
             embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
 
-            self.beta2 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
-            self.gamma2 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
-
-        weight = self.weights(y)
-        bias = self.biases(y)
+            self.beta1 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
+            self.gamma1 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
 
         return super(ConditionalBatchNorm2d, self).forward(input, self.beta1, self.gamma1)
+
 
 class Downsampling(pl.LightningModule):
     def __init__(self):
@@ -147,16 +89,6 @@ class Downsampling(pl.LightningModule):
         return x
 
 
-# class Downsampling(pl.LightningModule):
-#     def __init__(self, kernel_size, stride):
-#         super().__init__()
-
-#     def forward(self, x):
-#         dim_in = x.shape[2]
-#         pad = dim_in//2 if dim_in % 2 == 0 else (dim_in + 1) // 2
-#         return F.avg_pool2d(x, 2, 2, pad)
-
-
 class Dense(pl.LightningModule):
     def __init__(self, in_channels, out_channels, is_sn=False):
         super().__init__()
@@ -172,51 +104,22 @@ class Dense(pl.LightningModule):
         return x
 
 
-# class InnerProduct(pl.LightningModule):
-#     def __init__(self, in_channels, n_classes):
-#         super().__init__()
-#
-#         self.v = nn.init.xavier_uniform_(torch.empty(size=[n_classes, in_channels]))
-#
-#     def forward(self, x, y):
-#         self.v = self.v.transpose(0, 1)
-#         self.v = nn.utils.spectral_norm(self.v).transpose(0, 1)
-#
-#         temp = nn.Embedding.from_pretrained(embeddings=self.v)(y)
-#
-#         # temp = torch.index_select(self.v, dim=0, index=y)
-#         temp = torch.sum(temp * x, 1, keepdim=True)
-#
-#         return temp
-
 class InnerProduct(pl.LightningModule):
     def __init__(self, in_channels, n_classes):
         super().__init__()
 
         # nn.utils.spectral_norm inputs a layer, I wrapped v into Linear
         # I can not assign 2 spectral norm twice (python throws an Error, that's why I took it to __init__
-        # self.dense = nn.Linear(in_channels, n_classes, bias=False)
-        # nn.init.xavier_uniform_(self.dense.weight)
-        # self.dense = nn.utils.spectral_norm(self.dense)
-
         self.embedding = torch.nn.Embedding(n_classes, in_channels)
         self.embedding = torch.nn.utils.spectral_norm(self.embedding)
 
     def forward(self, x, y):
-        # print("Input inner product x shape:", x.size())
-
         # Cast y to long(), index should be int.
         temp = self.embedding(y.long())
-        # print("temp size from index_select:", temp.size())
 
         x = x.squeeze()  # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
 
-        # print("x shape:", x.size())
-        # print("temp shape:", temp.size())
-
-        temp = temp + x
-        # print(temp.size(), "should be [n, 1024]")
-        # print("temp size after sum:", temp.size())
+        temp = temp * x
 
         return temp
 
@@ -256,32 +159,18 @@ class GeneratorEncoderResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
-        # print('\n\t\tGeneratorEncoderResblock')
         temp = self.identity(x)
-
-        # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn1(x)
-        # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.downsampling(x)
-        # print('\t\tFree GPU memory after  x = self.downsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
-        # print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
-        # print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
-        # print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.downsampling(temp)
-        # print('\t\tFree GPU memory after  temp = self.downsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
-        # print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
-
         x += temp
-        # print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
 
         return x
 
@@ -311,33 +200,21 @@ class GeneratorResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x):
-        # print('\n\t\tGeneratorResblock')
 
         temp = self.identity(x)
-        # print('\t\tFree GPU memory after  temp = self.identity(x): {} MB'.format(self.get_gpu_memory()))
 
         x = self.bn1(x)
-        # print('\t\tFree GPU memory after  x = self.bn1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.upsampling(x)
-        # print('\t\tFree GPU memory after  x = self.upsampling(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv1(x)
-        # print('\t\tFree GPU memory after  x = self.conv1(x): {} MB'.format(self.get_gpu_memory()))
         x = self.bn2(x)
-        # print('\t\tFree GPU memory after  x = self.bn2(x): {} MB'.format(self.get_gpu_memory()))
         x = self.relu(x)
-        # print('\t\tFree GPU memory after  x = self.relu(x): {} MB'.format(self.get_gpu_memory()))
         x = self.conv2(x)
-        # print('\t\tFree GPU memory after  x = self.conv2(x): {} MB'.format(self.get_gpu_memory()))
 
         temp = self.upsampling(temp)
-        # print('\t\tFree GPU memory after  temp = self.upsampling(temp): {} MB'.format(self.get_gpu_memory()))
         temp = self.conv_identity(temp)
-        # print('\t\tFree GPU memory after  temp = self.conv_identity(temp): {} MB'.format(self.get_gpu_memory()))
 
         x += temp
-        # print('\t\tFree GPU memory after  x += temp: {} MB'.format(self.get_gpu_memory()))
 
         return x
 
