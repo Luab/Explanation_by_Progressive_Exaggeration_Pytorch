@@ -81,10 +81,10 @@ class DataModule(pl.LightningModule):
         assert os.path.isfile(self.data_path), f"File {self.data_path} is not found!"
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, self.batch_size, True)
+        return DataLoader(self.train_dataset, self.batch_size, True, num_workers=32)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, self.batch_size, False)
+        return DataLoader(self.val_dataset, self.batch_size, False, num_workers=32)
 
     @staticmethod
     def read_data_file(file_path, image_dir=''):
