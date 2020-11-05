@@ -113,7 +113,7 @@ class Explainer(pl.LightningModule):
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
         fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
         fake_q = fake_img_cls_prediction[:, self.target_class]
-        real_p = torch.tensor(y_target, dtype=torch.float32) * 0.1
+        real_p = y_target.clone().detach() * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
 
         # real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
@@ -201,10 +201,10 @@ class Explainer(pl.LightningModule):
     # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
     def convert_ordinal_to_binary(y, n):
-        y = torch.tensor(y, dtype=torch.int64)
+        y = y.int()
         new_y = torch.zeros([y.shape[-1], n])
         new_y[:, 0] = y
         for i in range(0, y.shape[0]):
             for j in range(1, y[i] + 1):
                 new_y[i, j] = 1
-        return torch.tensor(new_y, dtype=torch.float64)
+        return new_y.float()
