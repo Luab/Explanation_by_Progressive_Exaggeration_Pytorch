@@ -14,7 +14,7 @@ num_bins: 10
 target_class: 1
 #the class for which explanation has to be generated
 input_size: 128
-batch_size: 32
+batch_size: 8
 epochs: 300
 
 lambda_GAN: 1
