@@ -50,11 +50,11 @@ class ConditionalBatchNorm2d(ConditionalBatchNorm2dBase):
 
         self.input_shape = num_features
 
-        self.beta1 = torch.zeros(size=[num_features], requires_grad=True)
-        self.gamma1 = torch.ones(size=[num_features], requires_grad=True)
+        self.beta1 = torch.zeros(size=[num_features], requires_grad=True, device='cuda')
+        self.gamma1 = torch.ones(size=[num_features], requires_grad=True, device='cuda')
 
-        self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True)
-        self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True)
+        self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True, device='cuda')
+        self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True, device='cuda')
 
     def forward(self, input, y, **kwargs):
         if y is not None:
