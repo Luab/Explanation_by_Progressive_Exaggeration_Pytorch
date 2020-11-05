@@ -144,27 +144,27 @@ class GeneratorEncoderResblock(pl.LightningModule):
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
 
-    def __init__(self, in_channels, out_channels, is_sn=False):
+    def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = nn.BatchNorm2d(num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.downsampling = Downsampling()
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = nn.BatchNorm2d(num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
-    def forward(self, x):
+    def forward(self, x, y):
         temp = self.identity(x)
-        x = self.bn1(x)
+        x = self.bn1(x, y)
         x = self.relu(x)
         x = self.downsampling(x)
         x = self.conv1(x)
-        x = self.bn2(x)
+        x = self.bn2(x, y)
         x = self.relu(x)
         x = self.conv2(x)
 
@@ -185,29 +185,29 @@ class GeneratorResblock(pl.LightningModule):
         memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
         return memory_free_values[0]
 
-    def __init__(self, in_channels, out_channels, is_sn=False):
+    def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = nn.BatchNorm2d(num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.upsampling = nn.Upsample(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = nn.BatchNorm2d(num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
-    def forward(self, x):
+    def forward(self, x, y):
 
         temp = self.identity(x)
 
-        x = self.bn1(x)
+        x = self.bn1(x, y)
         x = self.relu(x)
         x = self.upsampling(x)
         x = self.conv1(x)
-        x = self.bn2(x)
+        x = self.bn2(x, y)
         x = self.relu(x)
         x = self.conv2(x)
 
