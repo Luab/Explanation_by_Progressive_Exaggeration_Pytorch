@@ -24,6 +24,8 @@ class Discriminator(pl.LightningModule):
     #  Here I deleted y argument in def forward
     #  TODO need to repair! add y argument (and fix inner-product function) and evaluate the total size
     def forward(self, x, y):
+
+        print("D y shape:", y.shape)
         y = y.squeeze()  # TODO Delete it after torchsummary
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
