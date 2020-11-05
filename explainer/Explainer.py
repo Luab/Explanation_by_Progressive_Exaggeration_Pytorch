@@ -61,22 +61,15 @@ class Explainer(pl.LightningModule):
         y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
         
         y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
-        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
-             
-        y_target = y_t[:, 0]
-        y_source = y_s[:, 0]
-        print("y_source:", y_target.size())
+        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins) 
 
         result = None
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
-            result = self.generator_step(x_source, y_target, y_source)
-            print('Free GPU memory after generator training step: {} MB\n'.format(self.get_gpu_memory()))
-
+            result = self.generator_step(x_source, y_t, y_s)
+            
         if optimizer_idx == 1:
             result = self.discriminator_step(x_source, y_t, y_s)
-            print('Free GPU memory after discriminator training step: {} MB\n'.format(self.get_gpu_memory()))
-            
 
         return result
 
@@ -84,7 +77,10 @@ class Explainer(pl.LightningModule):
         pass
 
     #   I suppose that we do not need validation_step
-    def generator_step(self, x_source, y_target, y_source):
+    def generator_step(self, x_source, y_t, y_s):
+        x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
+        y_target = y_t[:, 0]
+        y_source = y_s[:, 0]
         # print('Free GPU memory before generator training step: {} MB'.format(self.get_gpu_memory()))
         
         # print('fake_target_img, fake_target_img_embedding calculating...')
@@ -103,7 +99,7 @@ class Explainer(pl.LightningModule):
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
         # print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
         
-        fake_target_logits = self.D(fake_target_img, y_target)
+        fake_target_logits = self.D(fake_target_img, y_t)
         # print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
 
         g_loss_gan = self.generator_loss(fake_target_logits)
@@ -144,6 +140,8 @@ class Explainer(pl.LightningModule):
 
     def discriminator_step(self, x_source, y_t, y_s):
         # print("d")
+        
+        x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
         y_target = y_t[:, 0]
 
         real_source_logits = self.D(x_source, y_s)
