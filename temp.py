@@ -66,11 +66,11 @@ class CategoricalConditionalBatchNorm2d(ConditionalBatchNorm2d):
 
 if __name__ == '__main__':
     temp = torch.randn(size=[5, 3, 64, 64], requires_grad=True)
-    y = torch.randint(0, 10, size=[32])
+    y = torch.randint(0, 10, size=[5])
 
     original = temp.clone().detach()
 
-    bn = ConditionalBatchNorm2d(input_shape=3, num_classes=10)
+    bn = CategoricalConditionalBatchNorm2d(num_features=3, num_classes=10)
 
     output = bn(temp, y)
 
