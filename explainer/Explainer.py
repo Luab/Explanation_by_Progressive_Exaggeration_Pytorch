@@ -112,7 +112,7 @@ class Explainer(pl.LightningModule):
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
         fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
         # Here we have only one class, that why either we choose self.target_class - 1, or slices
-        fake_q = fake_img_cls_prediction[:, :self.target_class]
+        fake_q = fake_img_cls_prediction[:, self.target_class]
         real_p = y_target.clone().detach() * 0.1
         fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
 
@@ -122,8 +122,8 @@ class Explainer(pl.LightningModule):
         real_img_cls_logits_pretrained = self.model(x_source)
         # Here we have only one class, that why either we choose self.target_class - 1, or slices
         recons_evaluation = F.binary_cross_entropy_with_logits(
-            real_img_recons_cls_logit_pretrained[:, :self.target_class],
-            real_img_cls_logits_pretrained[:, :self.target_class]
+            real_img_recons_cls_logit_pretrained[:, self.target_class],
+            real_img_cls_logits_pretrained[:, self.target_class]
         )
 
         g_loss = g_loss_gan * self.lambda_gan + g_loss_rec * self.lambda_cyc + g_loss_cyc * self.lambda_cyc + fake_evaluation * self.lambda_cls + recons_evaluation * self.lambda_cls
