@@ -15,7 +15,7 @@ def main():
     # print('***************************')
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', default='/configs/celebA_Young_Explainer.yaml')
+    parser.add_argument('--config', '-c', default='/home/intern/BS19_implementation/configs/celebA_Young_Explainer.yaml')
     args = parser.parse_args()
 
     config_path = args.config
