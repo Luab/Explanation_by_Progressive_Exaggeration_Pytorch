@@ -10,7 +10,8 @@ import yaml
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', default='configs/celebA_YSBBB_Classifier.yaml')
+    parser.add_argument('--config', '-c',
+                        default='/home/intern/BS19_implementation/configs/celebA_Smile_Classifier.yaml')
     args = parser.parse_args()
 
     config_path = args.config

@@ -110,6 +110,7 @@ class Explainer(pl.LightningModule):
         g_loss_cyc = F.l1_loss(x_source, fake_source_img)
 
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
+        print("fake_img_cls_logit_pretrained shape:", fake_img_cls_logit_pretrained.shape)
         fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
         # Here we have only one class, that why either we choose self.target_class - 1, or slices
         fake_q = fake_img_cls_prediction[:, self.target_class]

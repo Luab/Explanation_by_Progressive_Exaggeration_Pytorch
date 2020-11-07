@@ -30,7 +30,6 @@ class DenseNet121(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         images, targets = batch
         outputs = self(images)
-        print("outputs shape:", outputs.shape)
         train_loss = self.loss(outputs, targets)
         result = pl.TrainResult(minimize=train_loss)
         result.log('train_loss', train_loss, on_epoch=True)
