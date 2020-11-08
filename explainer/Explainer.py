@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import pytorch_lightning as pl
 from explainer.Discriminator import Discriminator
 from explainer.GeneratorEncoderDecoder import GeneratorEncoderDecoder
@@ -21,7 +23,7 @@ class Explainer(pl.LightningModule):
         self.input_size = config['input_size']
         self.n_classes = config['num_class']
         self.n_bins = config['num_bins']
-        self.target_class = config['target_class']
+        self.target_class = config['target_class'] - 1
         self.lambda_gan = config['lambda_GAN']
         self.lambda_cyc = config['lambda_cyc']
         self.lambda_cls = config['lambda_cls']
@@ -66,15 +68,27 @@ class Explainer(pl.LightningModule):
         y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
         y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
 
-        result = None
+        output = None
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
-            result = self.generator_step(x_source, y_t, y_s)
+            g_loss = self.generator_step(x_source, y_t, y_s)
+            tqdm_dict = {'g_loss': g_loss}
+            output = OrderedDict({
+                'loss': g_loss,
+                'progress_bar': tqdm_dict,
+                'log': tqdm_dict
+            })
 
         if optimizer_idx == 1:
-            result = self.discriminator_step(x_source, y_t, y_s)
+            d_loss = self.discriminator_step(x_source, y_t, y_s)
+            tqdm_dict = {'d_loss': d_loss}
+            output = OrderedDict({
+                'loss': d_loss,
+                'progress_bar': tqdm_dict,
+                'log': tqdm_dict
+            })
 
-        return result
+        return output
 
     def validation_step(self, batch, batch_idx):
         pass
@@ -84,57 +98,48 @@ class Explainer(pl.LightningModule):
         x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
-        # print('Free GPU memory before generator training step: {} MB'.format(self.get_gpu_memory()))
 
-        # print('fake_target_img, fake_target_img_embedding calculating...')
         fake_target_img, fake_target_img_embedding = self.G(x_source, y_target)
-        # print('Free GPU memory after fake_target_img, fake_target_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
 
-        # print('fake_source_recons_img, x_source_img_embedding calculating...')
         fake_source_recons_img, x_source_img_embedding = self.G(x_source, y_source)
-        # print('Free GPU memory after fake_source_recons_img, x_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
 
-        # print('fake_source_img, fake_source_img_embedding calculating...')
         fake_source_img, fake_source_img_embedding = self.G(fake_target_img, y_source)
-        # print('Free GPU memory after fake_source_img, fake_source_img_embedding calculating: {} MB\n\n'.format(self.get_gpu_memory()))
 
-        # print('g_loss_rec calculating...')
         g_loss_rec = F.mse_loss(x_source_img_embedding, fake_source_img_embedding)
-        # print('Free GPU memory after g_loss_rec calculating: {} MB\n\n'.format(self.get_gpu_memory()))
 
         fake_target_logits = self.D(fake_target_img, y_t)
-        # print('Free GPU memory after Discriminator forward propagation: {} MB\n\n'.format(self.get_gpu_memory()))
 
+        print("fake_target_logits is on:", fake_target_logits.is_cuda)
         g_loss_gan = self.generator_loss(fake_target_logits)
+        print("g_loss_gan is on:", g_loss_gan.is_cuda)
 
         g_loss_cyc = F.l1_loss(x_source, fake_source_img)
 
         fake_img_cls_logit_pretrained = self.model(fake_target_img)
-        print("fake_img_cls_logit_pretrained shape:", fake_img_cls_logit_pretrained.shape)
-        fake_img_cls_prediction = torch.sigmoid(fake_img_cls_logit_pretrained)
-        # Here we have only one class, that why either we choose self.target_class - 1, or slices
-        fake_q = fake_img_cls_prediction[:, self.target_class]
-        real_p = y_target.clone().detach() * 0.1
-        fake_evaluation = real_p * torch.log(fake_q) + (1 - real_p) * torch.log(1 - fake_q)
+        print("outputs of pretrained model:", fake_img_cls_logit_pretrained.shape)
 
-
-        # Переписал с использованием binary_cross_entropy_with_logits, мб меньше памяти будет жрать
-        real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
-        real_img_cls_logits_pretrained = self.model(x_source)
-        # Here we have only one class, that why either we choose self.target_class - 1, or slices
-        recons_evaluation = F.binary_cross_entropy_with_logits(
-            real_img_recons_cls_logit_pretrained[:, self.target_class],
-            real_img_cls_logits_pretrained[:, self.target_class]
+        fake_evaluation = F.binary_cross_entropy_with_logits(
+            y_target.clone().detach() * 0.1,
+            fake_img_cls_logit_pretrained[:, self.target_class]
         )
 
-        g_loss = g_loss_gan * self.lambda_gan + g_loss_rec * self.lambda_cyc + g_loss_cyc * self.lambda_cyc + fake_evaluation * self.lambda_cls + recons_evaluation * self.lambda_cls
-        print("g_loss type:", type(g_loss), g_loss.shape)
+        real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
+        real_img_cls_logits_pretrained = self.model(x_source)
 
-        result = pl.TrainResult(minimize=g_loss, checkpoint_on=g_loss)
-        # Passed value to logging, may be we need to pass all values (recons_evaluation, fake_evaluation losses) to track it?
-        result.log('g_loss', g_loss, on_step=True, on_epoch=True, prog_bar=True)
+        recons_evaluation = F.binary_cross_entropy_with_logits(
+            real_img_recons_cls_logit_pretrained[:, self.target_class],
+            real_img_cls_logits_pretrained[:, self.target_class],
+        )
 
-        return result
+        g_loss = g_loss_gan * self.lambda_gan + \
+                 (g_loss_rec + g_loss_cyc) * self.lambda_cyc + \
+                 (fake_evaluation + recons_evaluation) * self.lambda_cls
+
+        # result = pl.TrainResult(minimize=g_loss, checkpoint_on=g_loss)
+        # result.log('g_loss', g_loss, on_step=True, on_epoch=True, prog_bar=True)
+        print("g_loss:", g_loss.item())
+
+        return g_loss
 
     def discriminator_step(self, x_source, y_t, y_s):
         # print("d")
@@ -150,48 +155,44 @@ class Explainer(pl.LightningModule):
 
         d_loss = d_loss_gan * self.lambda_gan
 
-        result = pl.TrainResult(minimize=d_loss)
-        result.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True)
-        # print("d")
+        # TrainResult is not used in GAN, we can not use TrainResult(g_loss) and TrainResult(d_loss) together
+        # result = pl.TrainResult(minimize=d_loss)
+        # result.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True)
+        print("d_loss:", d_loss.item())
 
-        return result
+        return d_loss
 
-    #   TODO check validity of loss functions for discriminator and generator
-    # ! F.multilabel_margin_loss is different from hinge in their repo
-    # ! Just make one-by-one like in article
-    # if loss_func == 'hinge':
-    #     zero = torch.tensor([0.0])
-    #     real_loss = - torch.mean(torch.min(zero, -1.0 + real))
-    #     fake_loss = - torch.mean(torch.min(zero, -1.0 - fake))
-    #     return real_loss + fake_loss
-    # ! May be pass type of loss like 'str', not like a function?
+    # There was a problem with device of tensor - now it is on cuda only
     def discriminator_loss(self, real, fake, loss_func=F.multilabel_margin_loss):
 
-        b = real.size(0)
-        y_real = torch.ones(b, 1)
+        if loss_func != F.multilabel_margin_loss:
+            raise NotImplemented
 
-        #   x_real - logits, it has already been passed through forward step of D
-        real_loss = F.binary_cross_entropy(real, y_real)
+        zero = torch.zeros(1, device='cuda')
 
-        y_fake = torch.zeros(b, 1)
+        real_loss = - torch.min(-1.0 + real, zero).mean()
+        fake_loss = - torch.min(-1.0 - fake, zero).mean()
 
-        #   x_fake - logits, it has already been passed through forward step of D
-        fake_loss = loss_func(fake, y_fake)
-
-        # gradient backpropagation & optimize ONLY D's parameters
         loss = real_loss + fake_loss
 
+        print("d loss is on:", loss.is_cuda)
         return loss
 
+    # There was a problem with device of tensor - now it is on cuda only
     def generator_loss(self, fake, loss_func=F.multilabel_margin_loss):
-        fake_loss = 0
 
-        if loss_func == F.multilabel_margin_loss:
-            fake_loss -= torch.mean(fake)
+        if loss_func != F.multilabel_margin_loss:
+            raise NotImplemented
 
-        loss = fake_loss
+        return - torch.mean(fake)
 
-        return loss
+    def training_epoch_end(self, outputs):
+        g_mean_loss = avg_loss = torch.stack([x['g_loss'] for x in outputs]).mean()
+        d_mean_loss = avg_loss = torch.stack([x['d_loss'] for x in outputs]).mean()
+
+        logs = {'g_mean_loss': g_mean_loss, 'd_mean_loss': d_mean_loss,}
+        results = {'log': logs}
+        return results
 
     # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
