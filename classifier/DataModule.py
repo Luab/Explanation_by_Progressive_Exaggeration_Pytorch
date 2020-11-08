@@ -83,8 +83,8 @@ class DataModule(pl.LightningModule):
     def train_dataloader(self):
         return DataLoader(self.train_dataset, self.batch_size, True, num_workers=2)
 
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, self.batch_size, False, num_workers=2)
+    # def val_dataloader(self):
+    #     return DataLoader(self.val_dataset, self.batch_size, False, num_workers=2)
 
     @staticmethod
     def read_data_file(file_path, image_dir=''):
