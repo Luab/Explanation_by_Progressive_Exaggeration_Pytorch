@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-from explainer.utils import *
+from explainer.utils import ConditionalBatchNorm2d, SpectralConv2d, GeneratorEncoderResblock, GeneratorResblock
 import subprocess as sp
 import torch.nn as nn
 
@@ -42,7 +42,6 @@ class GeneratorEncoderDecoder(pl.LightningModule):
     def forward(self, x, y):
         y = y.squeeze().long()  # TODO delete it after summary
 
-        print(type(x), type(y))
         x = self.bn1(x, y)
         x = self.relu(x)
         x = self.conv1(x)
