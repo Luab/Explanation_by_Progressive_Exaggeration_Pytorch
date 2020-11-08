@@ -34,7 +34,6 @@ def main():
     # Let's for now skip logger it until training will start
     # logger = TensorBoardLogger(config['log_dir'], name=config['name'])
     data_module = DataModule(config, from_explainer=True)
-    val_loader = data_module.val_dataloader()
     train_loader = data_module.train_dataloader()
 
     # In Explainer we shouldn't pass logger, only into Trainer
@@ -42,9 +41,9 @@ def main():
 
     # Let's for now skip logger it until training will start
     # By setting val_percent_check=0.0 validation would not execute
-    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, val_percent_check=0.0)
+    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, val_check_interval=0.0)
 
-    trainer.fit(explainer, train_loader, val_loader)
+    trainer.fit(explainer, train_loader)
 
 
 if __name__ == '__main__':
