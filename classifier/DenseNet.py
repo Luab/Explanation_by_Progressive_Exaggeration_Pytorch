@@ -32,6 +32,7 @@ class DenseNet121(pl.LightningModule):
         outputs = self(images)
         train_loss = self.loss(outputs, targets)
         result = pl.TrainResult(minimize=train_loss)
+        print("Output size of DenseNet", outputs.size())
         result.log('train_loss', train_loss, on_epoch=True)
         return result
 

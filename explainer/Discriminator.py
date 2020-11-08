@@ -21,8 +21,6 @@ class Discriminator(pl.LightningModule):
         self.inner_product = InnerProduct(in_channels=1024, n_classes=2)
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
-    #  Here I deleted y argument in def forward
-    #  TODO need to repair! add y argument (and fix inner-product function) and evaluate the total size
     def forward(self, x, y):
 
         y = y.squeeze()  # TODO Delete it after torchsummary
@@ -36,18 +34,15 @@ class Discriminator(pl.LightningModule):
         x = self.relu(x)
 
         x = self.global_sum_pooling(x)
-        # print(x.size(), 'should be [n, 1024, 1, 1]')
 
         for i in range(0, self.n_bins - 1):
             if i == 0:
                 temp = self.inner_product(x, y[:, i + 1])
-                # print("inner shape:", temp.size(), " should be [n, 1024]")
             else:
                 temp += self.inner_product(x, y[:, i + 1])
 
         x = x.view(-1, 1024)
         x = self.fc(x)
-        # print("Dense shape:", x.size())
 
         x = temp + x
 

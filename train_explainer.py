@@ -31,7 +31,8 @@ def main():
         verbose=True,
         mode='min',
     )
-    logger = TensorBoardLogger(config['log_dir'], name=config['name'])
+    # Let's for now skip logger it until training will start
+    # logger = TensorBoardLogger(config['log_dir'], name=config['name'])
     data_module = DataModule(config, from_explainer=True)
     val_loader = data_module.val_dataloader()
     train_loader = data_module.train_dataloader()
@@ -39,7 +40,9 @@ def main():
     # In Explainer we shouldn't pass logger, only into Trainer
     explainer = Explainer(config)
 
-    trainer = pl.Trainer(gpus=1, logger=logger, max_epochs=explainer.epochs, checkpoint_callback=checkpoint_callback)
+    # Let's for now skip logger it until training will start
+    # By setting val_percent_check=0.0 validation would not execute
+    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, val_percent_check=0.0)
 
     trainer.fit(explainer, train_loader, val_loader)
 
