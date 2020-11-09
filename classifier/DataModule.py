@@ -9,12 +9,6 @@ from torchvision import transforms
 
 
 class DataModule(pl.LightningModule):
-    #    this transform was used in the original implementation on TensorFlow
-    class CustomNormalize(object):
-        def __call__(self, img):
-            img = img - 0.5
-            img = img * 2.0
-            return img
 
     class _Dataset(Dataset):
         def __init__(self, csv_data, im_folder, transforms, from_explainer):
@@ -61,7 +55,8 @@ class DataModule(pl.LightningModule):
             transforms.CenterCrop(150),
             transforms.Resize(size=(128, 128)),
             transforms.ToTensor(),
-            DataModule.CustomNormalize()
+            # The same, but parallelize
+            transforms.Normalize(mean=[0.0, 0.0, 0.0], std=[2.0, 2.0, 2.0])
         ])
 
         if not from_explainer:
