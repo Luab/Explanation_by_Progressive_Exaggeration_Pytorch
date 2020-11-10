@@ -31,15 +31,13 @@ class DenseNet121(pl.LightningModule):
         images, targets = batch
         outputs = self(images)
         train_loss = self.loss(outputs, targets)
-        result = pl.TrainResult(minimize=train_loss)
-        print("Output size of DenseNet", outputs.size())
-        result.log('train_loss', train_loss, on_epoch=True)
-        return result
+
+        self.log('train_loss', train_loss, on_epoch=True)
+        return train_loss
 
     def validation_step(self, batch, batch_idx):
         images, targets = batch
         outputs = self(images)
-        validation_loss = self.loss(outputs, targets)
-        result = pl.EvalResult(checkpoint_on=validation_loss)
-        result.log('val_loss', validation_loss, on_step=True, on_epoch=True)
-        return result
+        val_loss = self.loss(outputs, targets)
+        self.log('val_loss', val_loss, on_step=True, on_epoch=True)
+        return val_loss

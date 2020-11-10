@@ -10,16 +10,15 @@ from torchvision import transforms
 
 class DataModule(pl.LightningModule):
 
-    class _Dataset(Dataset):
-        def __init__(self, csv_data, im_folder, transforms, from_explainer):
-            self.transforms = transforms
+    class CustomDataset(Dataset):
+        def __init__(self, csv_data, im_folder, _transforms, from_explainer):
+            self.transforms = _transforms
             self.im_folder = im_folder
             self.data = csv_data
             self.from_explainer = from_explainer
 
         def __getitem__(self, item):
             line = self.data.iloc[item]
-            image_path, labels = None, None
 
             if not self.from_explainer:
                 image_path, labels = line[0], torch.tensor(line[1:])
@@ -69,17 +68,17 @@ class DataModule(pl.LightningModule):
         train_data.index = range(len(train_data))
         val_data.index = range(len(val_data))
 
-        self.train_dataset = DataModule._Dataset(train_data, self.image_dir, self.transforms, from_explainer)
-        self.val_dataset = DataModule._Dataset(val_data, self.image_dir, self.transforms, from_explainer)
+        self.train_dataset = DataModule.CustomDataset(train_data, self.image_dir, self.transforms, from_explainer)
+        self.val_dataset = DataModule.CustomDataset(val_data, self.image_dir, self.transforms, from_explainer)
 
         assert os.path.isdir(self.image_dir), f"Check image path:{self.image_dir}!"
         assert os.path.isfile(self.data_path), f"File {self.data_path} is not found!"
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, self.batch_size, True, num_workers=2)
+        return DataLoader(self.train_dataset, self.batch_size, True, num_workers=32, drop_last=True)
 
-    # def val_dataloader(self):
-    #     return DataLoader(self.val_dataset, self.batch_size, False, num_workers=2)
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, self.batch_size, False, num_workers=32, drop_last=True)
 
     @staticmethod
     def read_data_file(file_path, image_dir=''):
@@ -97,7 +96,7 @@ class DataModule(pl.LightningModule):
                 row = [float(val) for val in row]
             except:
                 print(line)
-                img_name = img_name + ' ' + row[0]
+                img_name = img_name + ' ' + str(row[0])
                 row.pop(0)
                 row = [float(val) for val in row]
 
