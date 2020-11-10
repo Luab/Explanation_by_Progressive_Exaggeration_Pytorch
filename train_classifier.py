@@ -35,7 +35,8 @@ def main():
 
     model = DenseNet121(config)
 
-    trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, checkpoint_callback=checkpoint_callback)
+    trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callback=checkpoint_callback,
+                         progress_bar_refresh_rate=20)
 
     trainer.fit(model, train_loader, val_loader)
 

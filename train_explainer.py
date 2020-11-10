@@ -35,13 +35,14 @@ def main():
     # logger = TensorBoardLogger(config['log_dir'], name=config['name'])
     data_module = DataModule(config, from_explainer=True)
     train_loader = data_module.train_dataloader()
+    val_loader = data_module.val_dataloader()
 
     # In Explainer we shouldn't pass logger, only into Trainer
     explainer = Explainer(config)
 
     # Let's for now skip logger it until training will start
     # By setting val_percent_check=0.0 validation would not execute
-    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, val_check_interval=0.0)
+    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, limit_val_batches=50, limit_train_batches=50)
 
     trainer.fit(explainer, train_loader)
 

@@ -164,13 +164,17 @@ class Explainer(pl.LightningModule):
 
         return - torch.mean(fake)
 
-    def training_epoch_end(self, outputs):
-        g_mean_loss = avg_loss = torch.stack([x['g_loss'] for x in outputs if x is not None]).mean()
-        d_mean_loss = avg_loss = torch.stack([x['d_loss'] for x in outputs if x is not None]).mean()
-
-        logs = {'g_mean_loss': g_mean_loss, 'd_mean_loss': d_mean_loss, }
-        results = {'log': logs}
-        return results
+    # Not working, don't know how to fix it
+    # def training_epoch_end(self, outputs):
+    #     for x in outputs:
+    #         print(x[0])
+    #         raise IOError
+    #     g_mean_loss = torch.stack([x['g_loss'] for x in outputs]).mean()
+    #     d_mean_loss = torch.stack([x['d_loss'] for x in outputs]).mean()
+    #
+    #     logs = {'g_mean_loss': g_mean_loss, 'd_mean_loss': d_mean_loss, }
+    #     results = {'log': logs}
+    #     return results
 
     # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
