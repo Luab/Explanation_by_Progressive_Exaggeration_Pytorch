@@ -16,7 +16,10 @@ import subprocess as sp
 class Explainer(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
-
+        
+        self.train_step = 0
+        self.val_step = 0
+        
         self.batch_size = config['batch_size']
         self.epochs = config['epochs']
         self.channels = config['num_channel']
@@ -70,18 +73,42 @@ class Explainer(pl.LightningModule):
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
             g_loss = self.generator_step(x_source, y_t, y_s)
-            self.log('g_loss', g_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+            self.logger.experiment.add_scalar('g_loss_train_abs', torch.abs(g_loss), self.train_step)
+            self.logger.experiment.add_scalar('g_loss_train', g_loss, self.train_step)
             return g_loss
 
         if optimizer_idx == 1:
             d_loss = self.discriminator_step(x_source, y_t, y_s)
-            self.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+            self.logger.experiment.add_scalar('d_loss_train_abs', torch.abs(d_loss), self.train_step)
+            self.logger.experiment.add_scalar('d_loss_train', d_loss, self.train_step)
             return d_loss
-
+        
+        self.train_step += 1
+        
         # Attention, we skip batch
         return None
+    
+    def validation_step(self, batch, batch_idx):
+        x_source, y_s = batch
+        y_s = y_s.view(-1)
+        y_s = self.convert_ordinal_to_binary(y_s, self.n_bins)
 
-    #   I suppose that we do not need validation_step
+        y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
+        y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
+
+        g_loss = self.generator_step(x_source, y_t, y_s)
+        self.logger.experiment.add_scalar('g_loss_val', g_loss, self.val_step)
+        self.logger.experiment.add_scalar('g_loss_val_abs', torch.abs(g_loss), self.val_step)
+
+        d_loss = self.discriminator_step(x_source, y_t, y_s)
+        self.logger.experiment.add_scalar('d_loss_val', d_loss, self.val_step)
+        self.logger.experiment.add_scalar('d_loss_val_abs', torch.abs(d_loss), self.val_step)
+        
+        self.val_step += 1
+        
+        self.log('val_loss_abs', torch.abs(g_loss))
+        return torch.abs(g_loss)
+
     def generator_step(self, x_source, y_t, y_s):
         x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
         y_target = y_t[:, 0]
@@ -102,7 +129,7 @@ class Explainer(pl.LightningModule):
             y_target.clone().detach() * 0.1,
             fake_img_cls_logit_pretrained[:, self.target_class]
         )
-
+        
         real_img_recons_cls_logit_pretrained = self.model(fake_source_img)
         real_img_cls_logits_pretrained = self.model(x_source)
         recons_evaluation = F.binary_cross_entropy_with_logits(
@@ -113,10 +140,10 @@ class Explainer(pl.LightningModule):
         g_loss = g_loss_gan * self.lambda_gan + \
                  (g_loss_rec + g_loss_cyc) * self.lambda_cyc + \
                  (fake_evaluation + recons_evaluation) * self.lambda_cls
-
-        # result = pl.TrainResult(minimize=g_loss, checkpoint_on=g_loss)
-        # result.log('g_loss', g_loss, on_step=True, on_epoch=True, prog_bar=True)
-        # print("g_loss:", g_loss.item())
+        
+        if self.val_step % 5 == 0:
+            self.logger.experiment.add_image('True image', x_source[0], self.val_step)
+            self.logger.experiment.add_image('Generated image', fake_target_img[0], self.val_step)
 
         return g_loss
 
@@ -133,11 +160,6 @@ class Explainer(pl.LightningModule):
 
         d_loss = d_loss_gan * self.lambda_gan
 
-        # TrainResult is not used in GAN, we can not use TrainResult(g_loss) and TrainResult(d_loss) together
-        # result = pl.TrainResult(minimize=d_loss)
-        # result.log('d_loss', d_loss, on_step=True, on_epoch=True, prog_bar=True)
-        # print("d_loss:", d_loss.item())
-
         return d_loss
 
     # There was a problem with device of tensor - now it is on cuda only
@@ -145,7 +167,7 @@ class Explainer(pl.LightningModule):
 
         if loss_func != F.multilabel_margin_loss:
             raise NotImplemented
-
+            
         zero = torch.zeros(1, device='cuda')
 
         real_loss = - torch.min(-1.0 + real, zero).mean()
@@ -153,7 +175,6 @@ class Explainer(pl.LightningModule):
 
         loss = real_loss + fake_loss
 
-        # print("d loss is on:", loss.is_cuda)
         return loss
 
     # There was a problem with device of tensor - now it is on cuda only
@@ -163,18 +184,6 @@ class Explainer(pl.LightningModule):
             raise NotImplemented
 
         return - torch.mean(fake)
-
-    # Not working, don't know how to fix it
-    # def training_epoch_end(self, outputs):
-    #     for x in outputs:
-    #         print(x[0])
-    #         raise IOError
-    #     g_mean_loss = torch.stack([x['g_loss'] for x in outputs]).mean()
-    #     d_mean_loss = torch.stack([x['d_loss'] for x in outputs]).mean()
-    #
-    #     logs = {'g_mean_loss': g_mean_loss, 'd_mean_loss': d_mean_loss, }
-    #     results = {'log': logs}
-    #     return results
 
     # Instead of this we could use torch.nn.functional.one_hot, numpy is super slow
     @staticmethod
