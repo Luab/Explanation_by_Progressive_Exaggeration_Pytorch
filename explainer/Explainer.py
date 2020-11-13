@@ -36,7 +36,7 @@ class Explainer(pl.LightningModule):
         self.G = GeneratorEncoderDecoder(self.n_bins)
         self.D = Discriminator(self.n_bins)
 
-        self.model = DenseNet121(config)
+        self.model = DenseNet121(config, pretrained=False)
         cls_ckpt_path = os.path.join(config['cls_experiment'], 'last.ckpt')
         cls_ckpt = torch.load(cls_ckpt_path)
         self.model.load_state_dict(cls_ckpt['state_dict'])

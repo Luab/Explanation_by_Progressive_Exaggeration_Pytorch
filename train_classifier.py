@@ -33,7 +33,7 @@ def main():
     val_loader = data_module.val_dataloader()
     train_loader = data_module.train_dataloader()
 
-    model = DenseNet121(config)
+    model = DenseNet121(config, pretrained=True)
 
     trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callback=checkpoint_callback,
                          progress_bar_refresh_rate=20)

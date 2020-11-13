@@ -5,7 +5,7 @@ import torch
 
 
 class DenseNet121(pl.LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, pretrained):
         super().__init__()
 
         self.batch_size = config['batch_size']
@@ -13,8 +13,7 @@ class DenseNet121(pl.LightningModule):
         self.channels = config['num_channel']
         self.input_size = config['input_size']
         self.n_classes = config['num_class']
-
-        self.model = models.densenet121(pretrained=True)
+        self.model = models.densenet121(pretrained=pretrained)
         num_ftrs = self.model.classifier.in_features
         self.model.classifier = nn.Linear(num_ftrs, self.n_classes)
 
