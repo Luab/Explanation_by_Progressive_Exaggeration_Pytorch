@@ -22,7 +22,7 @@ def main():
         filepath=os.path.join('checkpoints/explainer', config['name'], 'explainer'),
         save_last=True,
         save_top_k=1,
-        monitor='val_loss_abs',
+        monitor='g_loss_val',
         verbose=True,
         mode='min'
     )
