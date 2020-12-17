@@ -73,13 +73,11 @@ class Explainer(pl.LightningModule):
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
             g_loss = self.generator_step(x_source, y_t, y_s)
-            self.logger.experiment.add_scalar('g_loss_train_abs', torch.abs(g_loss), self.train_step)
             self.logger.experiment.add_scalar('g_loss_train', g_loss, self.train_step)
             return g_loss
 
         if optimizer_idx == 1:
             d_loss = self.discriminator_step(x_source, y_t, y_s)
-            self.logger.experiment.add_scalar('d_loss_train_abs', torch.abs(d_loss), self.train_step)
             self.logger.experiment.add_scalar('d_loss_train', d_loss, self.train_step)
             return d_loss
         
@@ -98,16 +96,13 @@ class Explainer(pl.LightningModule):
 
         g_loss = self.generator_step(x_source, y_t, y_s)
         self.logger.experiment.add_scalar('g_loss_val', g_loss, self.val_step)
-        self.logger.experiment.add_scalar('g_loss_val_abs', torch.abs(g_loss), self.val_step)
 
         d_loss = self.discriminator_step(x_source, y_t, y_s)
         self.logger.experiment.add_scalar('d_loss_val', d_loss, self.val_step)
-        self.logger.experiment.add_scalar('d_loss_val_abs', torch.abs(d_loss), self.val_step)
         
         self.val_step += 1
         
-        self.log('val_loss_abs', torch.abs(g_loss))
-        return torch.abs(g_loss)
+        return g_loss
 
     def generator_step(self, x_source, y_t, y_s):
         x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
