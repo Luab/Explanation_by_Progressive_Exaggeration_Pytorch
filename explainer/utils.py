@@ -5,12 +5,12 @@ import subprocess as sp
 import torch
 
 
-class ConditionalBatchNorm2dBase(nn.BatchNorm2d):
+class ConditionalBatchNorm2d(nn.BatchNorm2d):
     """Conditional Batch Normalization"""
 
-    def __init__(self, num_features, eps=1e-3, momentum=0.5,
+    def __init__(self, num_features, eps=1e-05, momentum=0.1,
                  affine=False, track_running_stats=True):
-        super(ConditionalBatchNorm2dBase, self).__init__(
+        super(ConditionalBatchNorm2d, self).__init__(
             num_features, eps, momentum, affine, track_running_stats
         )
 
@@ -40,31 +40,27 @@ class ConditionalBatchNorm2dBase(nn.BatchNorm2d):
         return weight * output + bias
 
 
-class ConditionalBatchNorm2d(ConditionalBatchNorm2dBase):
+class CategoricalConditionalBatchNorm2d(ConditionalBatchNorm2d):
 
-    def __init__(self, num_classes, num_features, eps=1e-3, momentum=0.5,
+    def __init__(self, num_classes, num_features, eps=1e-5, momentum=0.1,
                  affine=False, track_running_stats=True):
-        super(ConditionalBatchNorm2d, self).__init__(
+        super(CategoricalConditionalBatchNorm2d, self).__init__(
             num_features, eps, momentum, affine, track_running_stats
         )
+        self.weights = nn.Embedding(num_classes, num_features)
+        self.biases = nn.Embedding(num_classes, num_features)
 
-        self.input_shape = num_features
+        self._initialize()
 
-        self.beta1 = torch.zeros(size=[num_features], requires_grad=True, device='cuda')
-        self.gamma1 = torch.ones(size=[num_features], requires_grad=True, device='cuda')
+    def _initialize(self):
+        init.ones_(self.weights.weight.data)
+        init.zeros_(self.biases.weight.data)
 
-        self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True, device='cuda')
-        self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True, device='cuda')
+    def forward(self, input, c, **kwargs):
+        weight = self.weights(c)
+        bias = self.biases(c)
 
-    def forward(self, input, y, **kwargs):
-        if y is not None:
-            embedding_weight = nn.Embedding.from_pretrained(self.beta2)
-            embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
-
-            self.beta1 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
-            self.gamma1 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
-
-        return super(ConditionalBatchNorm2d, self).forward(input, self.beta1, self.gamma1)
+        return super(CategoricalConditionalBatchNorm2d, self).forward(input, weight, bias)
 
 
 class Downsampling(pl.LightningModule):

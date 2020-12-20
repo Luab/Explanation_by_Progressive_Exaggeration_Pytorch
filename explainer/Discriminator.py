@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
-from explainer.utils import *
 import torch.nn as nn
+
+from explainer.utils import *
 
 
 class Discriminator(pl.LightningModule):
@@ -18,11 +19,13 @@ class Discriminator(pl.LightningModule):
 
         self.relu = nn.ReLU()
         self.global_sum_pooling = nn.AvgPool2d(kernel_size=4)
-        self.inner_product = InnerProduct(in_channels=1024, n_classes=2)
+
+        self.inner_product = nn.utils.spectral_norm(
+            nn.Embedding(n_bins, 1024)
+        )
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
     def forward(self, x, y):
-
         y = y.squeeze()  # TODO Delete it after torchsummary
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
@@ -30,20 +33,14 @@ class Discriminator(pl.LightningModule):
         x = self.d_res_block4(x)
         x = self.d_res_block5(x)
         x = self.d_res_block6(x)
-
         x = self.relu(x)
-
         x = self.global_sum_pooling(x)
-
-        for i in range(0, self.n_bins - 1):
-            if i == 0:
-                temp = self.inner_product(x, y[:, i + 1])
-            else:
-                temp += self.inner_product(x, y[:, i + 1])
-
         x = x.view(-1, 1024)
-        x = self.fc(x)
+        outputs = self.fc(x)
 
-        x = temp + x
+        # Code was taken from
+        # https://github.com/crcrpar/pytorch.sngan_projection/blob/master/models/discriminators/snresnet64.py
+        if y is not None:
+            outputs += torch.sum(self.inner_product(y) * x, dim=1, keepdim=True)
 
-        return x
+        return outputs
