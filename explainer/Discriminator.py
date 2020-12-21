@@ -26,7 +26,7 @@ class Discriminator(pl.LightningModule):
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
     def forward(self, x, y):
-        y = y.squeeze()  # TODO Delete it after torchsummary
+        y = y.squeeze().long()  # TODO Delete it after torchsummary
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
         x = self.d_res_block3(x)

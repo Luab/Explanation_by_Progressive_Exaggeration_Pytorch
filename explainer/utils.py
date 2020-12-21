@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import subprocess as sp
 import torch
-
+from torch.nn import init
 
 class ConditionalBatchNorm2d(nn.BatchNorm2d):
     """Conditional Batch Normalization"""
@@ -144,12 +144,12 @@ class GeneratorEncoderResblock(pl.LightningModule):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.downsampling = Downsampling()
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
@@ -185,12 +185,12 @@ class GeneratorResblock(pl.LightningModule):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.upsampling = nn.Upsample(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
