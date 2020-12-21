@@ -25,6 +25,12 @@ class Discriminator(pl.LightningModule):
         )
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
+    def initialise_(self):
+        """xavier initialization for self.inner_product"""
+        optional_l_y = getattr(self, 'l_y', None)
+        if optional_l_y is not None:
+            init.xavier_uniform_(optional_l_y.weight.data)
+
     def forward(self, x, y):
         y = y.squeeze().long()  # TODO Delete it after torchsummary
         x = self.d_res_block1(x)
