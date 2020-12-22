@@ -1,6 +1,8 @@
 from collections import OrderedDict
 
 import pytorch_lightning as pl
+import torchvision
+
 from explainer.Discriminator import Discriminator
 from explainer.GeneratorEncoderDecoder import GeneratorEncoderDecoder
 from classifier.DenseNet import DenseNet121
@@ -45,15 +47,6 @@ class Explainer(pl.LightningModule):
         for p in self.model.parameters():
             p.requires_grad_(False)
 
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
-
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-
     def forward(self, x, y):
         return self.G(x, y)
 
@@ -72,12 +65,12 @@ class Explainer(pl.LightningModule):
         y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
 
         if batch_idx % 5 == 0 and optimizer_idx == 0:
-            g_loss = self.generator_step(x_source, y_t, y_s)
+            g_loss = self.generator_step(x_source, y_t, y_s, 'train')
             self.logger.experiment.add_scalar('g_loss_train', g_loss, self.train_step)
             return g_loss
 
         if optimizer_idx == 1:
-            d_loss = self.discriminator_step(x_source, y_t, y_s)
+            d_loss = self.discriminator_step(x_source, y_t, y_s, self.train_step, 'train')
             self.logger.experiment.add_scalar('d_loss_train', d_loss, self.train_step)
             return d_loss
         
@@ -94,17 +87,19 @@ class Explainer(pl.LightningModule):
         y_t = torch.randint(low=0, high=self.n_bins, size=[self.batch_size])
         y_t = self.convert_ordinal_to_binary(y_t, self.n_bins)
 
-        g_loss = self.generator_step(x_source, y_t, y_s)
+        g_loss = self.generator_step(x_source, y_t, y_s, 'val')
         self.logger.experiment.add_scalar('g_loss_val', g_loss, self.val_step)
 
-        d_loss = self.discriminator_step(x_source, y_t, y_s)
+        d_loss = self.discriminator_step(x_source, y_t, y_s, self.val_step, 'val')
         self.logger.experiment.add_scalar('d_loss_val', d_loss, self.val_step)
         
         self.val_step += 1
         
+        self.log('g_loss_val', g_loss)
+        
         return g_loss
 
-    def generator_step(self, x_source, y_t, y_s):
+    def generator_step(self, x_source, y_t, y_s, stage):
         x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
         y_target = y_t[:, 0]
         y_source = y_s[:, 0]
@@ -136,13 +131,21 @@ class Explainer(pl.LightningModule):
                  (g_loss_rec + g_loss_cyc) * self.lambda_cyc + \
                  (fake_evaluation + recons_evaluation) * self.lambda_cls
         
-        if self.val_step % 5 == 0:
-            self.logger.experiment.add_image('True image', x_source[0], self.val_step)
-            self.logger.experiment.add_image('Generated image', fake_target_img[0], self.val_step)
-
+        if stage == 'train' and self.train_step % 10 == 0:
+            grid_img_source = torchvision.utils.make_grid(x_source, nrow=8)
+            grid_img_fake = torchvision.utils.make_grid(fake_target_img, nrow=8)
+            self.logger.experiment.add_image('True images : Train stage', grid_img_source, self.train_step)
+            self.logger.experiment.add_image('Generated images : Train stage', grid_img_fake, self.train_step)
+            
+        if stage == 'val' and self.val_step % 10 == 0:
+            grid_img_source = torchvision.utils.make_grid(x_source, nrow=8)
+            grid_img_fake = torchvision.utils.make_grid(fake_target_img, nrow=8)
+            self.logger.experiment.add_image('True images : Validation stage', grid_img_source, self.val_step)
+            self.logger.experiment.add_image('Generated images : Validation stage', grid_img_fake, self.val_step)
+            
         return g_loss
 
-    def discriminator_step(self, x_source, y_t, y_s):
+    def discriminator_step(self, x_source, y_t, y_s, step, stage):
 
         x_source, y_t, y_s = x_source.cuda(), y_t.cuda(), y_s.cuda()
         y_target = y_t[:, 0]

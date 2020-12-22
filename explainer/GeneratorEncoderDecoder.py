@@ -28,17 +28,7 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         self.conv = SpectralConv2d(in_channels=64, out_channels=3, kernel_size=3, stride=1)
 
         self.tanh = nn.Tanh()
-    
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
 
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-    
     def forward(self, x, y):
         y = y.squeeze().long()  # TODO delete it after summary
 

@@ -32,7 +32,8 @@ class Discriminator(pl.LightningModule):
             init.xavier_uniform_(optional_l_y.weight.data)
 
     def forward(self, x, y):
-        y = y.squeeze().long()  # TODO Delete it after torchsummary
+        y = y[:, 0].squeeze().long()  # TODO Delete it after torchsummary
+        # print('shape of y:', y.size())
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
         x = self.d_res_block3(x)
@@ -40,8 +41,10 @@ class Discriminator(pl.LightningModule):
         x = self.d_res_block5(x)
         x = self.d_res_block6(x)
         x = self.relu(x)
-        x = self.global_sum_pooling(x)
-        x = x.view(-1, 1024)
+        # x = self.global_sum_pooling(x)
+        x = torch.sum(x, dim=(2, 3))
+        # print('shape of x:', x.size())
+
         outputs = self.fc(x)
 
         # Code was taken from
