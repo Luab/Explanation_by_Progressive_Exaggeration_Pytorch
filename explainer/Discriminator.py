@@ -1,6 +1,3 @@
-import pytorch_lightning as pl
-import torch.nn as nn
-
 from explainer.utils import *
 
 
@@ -18,21 +15,12 @@ class Discriminator(pl.LightningModule):
         self.d_res_block6 = DiscriminatorResBlock(in_channels=1024, out_channels=1024, is_down=False)
 
         self.relu = nn.ReLU()
-        self.global_sum_pooling = nn.AvgPool2d(kernel_size=4)
-
-        self.inner_product = nn.utils.spectral_norm(
-            nn.Embedding(n_bins, 1024)
-        )
+        self.global_sum_pooling = GlobalSumPooling()
+        self.inner_product = InnerProduct(2, 1024)
         self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
-    def initialise_(self):
-        """xavier initialization for self.inner_product"""
-        optional_l_y = getattr(self, 'l_y', None)
-        if optional_l_y is not None:
-            init.xavier_uniform_(optional_l_y.weight.data)
-
     def forward(self, x, y):
-        y = y[:, 0].squeeze().long()  # TODO Delete it after torchsummary
+        # y = y[:, 0].squeeze().long()  # TODO Delete it after torchsummary
         # print('shape of y:', y.size())
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
@@ -41,15 +29,17 @@ class Discriminator(pl.LightningModule):
         x = self.d_res_block5(x)
         x = self.d_res_block6(x)
         x = self.relu(x)
-        # x = self.global_sum_pooling(x)
-        x = torch.sum(x, dim=(2, 3))
-        # print('shape of x:', x.size())
-
-        outputs = self.fc(x)
-
-        # Code was taken from
-        # https://github.com/crcrpar/pytorch.sngan_projection/blob/master/models/discriminators/snresnet64.py
-        if y is not None:
-            outputs += torch.sum(self.inner_product(y) * x, dim=1, keepdim=True)
-
-        return outputs
+        x = self.global_sum_pooling(x)
+        
+        temp = None
+        for i in range(0, self.n_bins - 1):
+            if i == 0:
+                temp = self.inner_product(x, y[:, i + 1].long())
+            else:
+                temp += self.inner_product(x, y[:, i + 1].long())
+        
+        x = self.fc(x)
+        
+        x = temp + x
+        
+        return x

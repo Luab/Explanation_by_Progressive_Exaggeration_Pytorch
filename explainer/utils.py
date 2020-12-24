@@ -101,22 +101,16 @@ class Dense(pl.LightningModule):
 
 
 class InnerProduct(pl.LightningModule):
-    def __init__(self, in_channels, n_classes):
+    def __init__(self, nums_class, n_channels):
         super().__init__()
 
-        # nn.utils.spectral_norm inputs a layer, I wrapped v into Linear
-        # I can not assign 2 spectral norm twice (python throws an Error, that's why I took it to __init__
-        self.embedding = torch.nn.Embedding(n_classes, in_channels)
-        self.embedding = torch.nn.utils.spectral_norm(self.embedding)
+        self.V = nn.Embedding(nums_class, n_channels)
+        self.V = nn.utils.spectral_norm(self.V)
 
     def forward(self, x, y):
-        # Cast y to long(), index should be int.
-        temp = self.embedding(y.long())
-
-        x = x.squeeze()  # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
-
-        temp = temp * x
-
+        temp = self.V(y)
+        temp = torch.sum(temp * x, dim=1, keepdim=True)
+        
         return temp
 
 
@@ -125,7 +119,7 @@ class GlobalSumPooling(pl.LightningModule):
         super().__init__()
 
     def forward(self, x):
-        x = torch.sum(x, [1, 2])
+        x = torch.sum(x, [2, 3])
 
         return x
 
