@@ -30,7 +30,7 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         self.tanh = nn.Tanh()
 
     def forward(self, x, y):
-        y = y.squeeze().long()  # TODO delete it after summary
+        # y = y.squeeze().long()  # TODO delete it after summary
 
         x = self.bn1(x, y)
         x = self.relu(x)

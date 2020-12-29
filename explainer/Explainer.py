@@ -132,8 +132,6 @@ class Explainer(pl.LightningModule):
         #recons_evaluation = (real_img_cls_prediction * torch.log(real_img_recons_cls_prediction)) + \
             #((1 - real_img_cls_prediction) * torch.log(1 - real_img_recons_cls_prediction))
         recons_evaluation = F.binary_cross_entropy(real_img_recons_cls_prediction[:,0], real_img_cls_prediction[:,0])
-        print(real_img_recons_cls_prediction)
-        print(recons_evaluation)
         recons_evaluation = -torch.mean(recons_evaluation)
         # print(recons_evaluation)
         

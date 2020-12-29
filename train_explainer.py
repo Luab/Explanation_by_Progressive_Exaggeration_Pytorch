@@ -34,7 +34,7 @@ def main():
 
     explainer = Explainer(config)
 
-    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, logger=logger, callbacks=[checkpoint_callback])
+    trainer = pl.Trainer(gpus=1, max_epochs=explainer.epochs, logger=logger, callbacks=[checkpoint_callback], accumulate_grad_batches=4)
 
     trainer.fit(explainer, train_loader, val_loader)
 
