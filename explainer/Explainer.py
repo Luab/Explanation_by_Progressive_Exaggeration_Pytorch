@@ -139,7 +139,7 @@ class Explainer(pl.LightningModule):
                  (g_loss_rec + g_loss_cyc) * self.lambda_cyc + \
                  (fake_evaluation + recons_evaluation) * self.lambda_cls
         
-        if stage == 'train' and self.train_step % self.save_summary == 0:
+        if stage == 'train' and (self.train_step + 1) % 5 == 0:
             grid_x_source = torchvision.utils.make_grid(x_source, nrow=8)
             grid_fake_target_img = torchvision.utils.make_grid(fake_target_img, nrow=8)
             grid_fake_source_img = torchvision.utils.make_grid(fake_source_img, nrow=8)
@@ -154,7 +154,7 @@ class Explainer(pl.LightningModule):
             self.logger.experiment.add_scalar('fake_evaluation_train', fake_evaluation, self.train_step)
             self.logger.experiment.add_scalar('recons_evaluation_train', recons_evaluation, self.train_step)
             
-        if stage == 'val' and self.val_step % self.save_summary == 0:
+        if stage == 'val' and (self.val_step + 1) % 5 == 0:
             grid_x_source = torchvision.utils.make_grid(x_source, nrow=8)
             grid_fake_target_img = torchvision.utils.make_grid(fake_target_img, nrow=8)
             grid_fake_source_img = torchvision.utils.make_grid(fake_source_img, nrow=8)

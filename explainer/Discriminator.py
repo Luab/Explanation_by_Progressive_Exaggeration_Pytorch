@@ -16,8 +16,9 @@ class Discriminator(pl.LightningModule):
 
         self.relu = nn.ReLU()
         self.global_sum_pooling = GlobalSumPooling()
-        self.inner_product = InnerProduct(2, 1024)
-        self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
+        self.inner_product = InnerProduct(self.n_bins, 1024)
+        self.dense = Dense(1024, 1, is_sn=True)
+        # self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
     def forward(self, x, y):
         # y = y[:, 0].squeeze().long()  # TODO Delete it after torchsummary
@@ -38,7 +39,7 @@ class Discriminator(pl.LightningModule):
             else:
                 temp += self.inner_product(x, y[:, i + 1].long())
         
-        x = self.fc(x)
+        x = self.dense(x)
         
         x = temp + x
         

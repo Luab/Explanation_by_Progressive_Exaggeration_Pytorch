@@ -1,66 +1,39 @@
 import pytorch_lightning as pl
 import torch.nn as nn
 import torch.nn.functional as F
-import subprocess as sp
 import torch
-from torch.nn import init
+import torch.nn.functional as F
 
-class ConditionalBatchNorm2d(nn.BatchNorm2d):
-    """Conditional Batch Normalization"""
+class ConditionalBatchNorm2d(pl.LightningModule):
+    def __init__(self, nums_class, num_features):
+        super().__init__()
+        
+        self.num_features = num_features
+        
+        self.bn = nn.BatchNorm2d(num_features=num_features, momentum=0.5, eps=1e-3)
+        
+        self.beta = nn.Parameter(torch.zeros(size=[num_features]))
+        self.gamma = nn.Parameter(torch.ones(size=[num_features]))
 
-    def __init__(self, num_features, eps=1e-05, momentum=0.1,
-                 affine=False, track_running_stats=True):
-        super(ConditionalBatchNorm2d, self).__init__(
-            num_features, eps, momentum, affine, track_running_stats
-        )
+        self.beta_conditional = nn.Embedding(nums_class, num_features)
+        nn.init.zeros_(self.beta_conditional.weight.data)
+        
+        self.gamma_conditional = nn.Embedding(nums_class, num_features)
+        nn.init.ones_(self.gamma_conditional.weight.data)
+    
+    
+    def forward(self, x, y=None):
+        if y is None:
+            x = self.bn(x)
+        else:
+            beta, gamma = self.beta_conditional(y.long()), self.gamma_conditional(y.long())
+            beta = torch.reshape(beta, [-1, self.num_features, 1, 1])
+            gamma = torch.reshape(gamma, [-1, self.num_features, 1, 1])
+            
+            x = self.bn(x)
+            x = gamma * x + beta
 
-    def forward(self, input, weight, bias, **kwargs):
-        self._check_input_dim(input)
-
-        exponential_average_factor = 0.0
-
-        if self.training and self.track_running_stats:
-            self.num_batches_tracked += 1
-            if self.momentum is None:  # use cumulative moving average
-                exponential_average_factor = 1.0 / self.num_batches_tracked.item()
-            else:  # use exponential moving average
-                exponential_average_factor = self.momentum
-
-        output = F.batch_norm(input, self.running_mean, self.running_var,
-                              self.weight, self.bias,
-                              self.training or not self.track_running_stats,
-                              exponential_average_factor, self.eps)
-        if weight.dim() == 1:
-            weight = weight.unsqueeze(0)
-        if bias.dim() == 1:
-            bias = bias.unsqueeze(0)
-        size = output.size()
-        weight = weight.unsqueeze(-1).unsqueeze(-1).expand(size)
-        bias = bias.unsqueeze(-1).unsqueeze(-1).expand(size)
-        return weight * output + bias
-
-
-class CategoricalConditionalBatchNorm2d(ConditionalBatchNorm2d):
-
-    def __init__(self, num_classes, num_features, eps=1e-5, momentum=0.1,
-                 affine=False, track_running_stats=True):
-        super(CategoricalConditionalBatchNorm2d, self).__init__(
-            num_features, eps, momentum, affine, track_running_stats
-        )
-        self.weights = nn.Embedding(num_classes, num_features)
-        self.biases = nn.Embedding(num_classes, num_features)
-
-        self._initialize()
-
-    def _initialize(self):
-        init.ones_(self.weights.weight.data)
-        init.zeros_(self.biases.weight.data)
-
-    def forward(self, input, c, **kwargs):
-        weight = self.weights(c)
-        bias = self.biases(c)
-
-        return super(CategoricalConditionalBatchNorm2d, self).forward(input, weight, bias)
+        return x
 
 
 class Downsampling(pl.LightningModule):
@@ -90,6 +63,9 @@ class Dense(pl.LightningModule):
         super().__init__()
 
         self.fc = nn.Linear(in_channels, out_channels)
+        
+        nn.init.xavier_uniform_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0.0)
 
         if is_sn:
             self.fc = nn.utils.spectral_norm(self.fc)
@@ -105,12 +81,12 @@ class InnerProduct(pl.LightningModule):
         super().__init__()
 
         self.V = nn.Embedding(nums_class, n_channels)
+        nn.init.xavier_uniform_(self.V.weight.data)
         self.V = nn.utils.spectral_norm(self.V)
 
     def forward(self, x, y):
         temp = self.V(y)
         temp = torch.sum(temp * x, dim=1, keepdim=True)
-        
         return temp
 
 
@@ -119,31 +95,22 @@ class GlobalSumPooling(pl.LightningModule):
         super().__init__()
 
     def forward(self, x):
-        x = torch.sum(x, [2, 3])
+        x = torch.sum(x, [2, 3], keepdim=False)
 
         return x
 
 
 class GeneratorEncoderResblock(pl.LightningModule):
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
-
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-
     def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.downsampling = Downsampling()
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
@@ -166,25 +133,16 @@ class GeneratorEncoderResblock(pl.LightningModule):
 
 
 class GeneratorResblock(pl.LightningModule):
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
-
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-
     def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.upsampling = nn.Upsample(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = CategoricalConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
@@ -255,7 +213,10 @@ class SpectralConv2d(pl.LightningModule):
         #   Assuming that stride = 1
         padding = int((kernel_size - 1) / 2)
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-
+            
+        nn.init.xavier_uniform_(self.conv.weight)
+        nn.init.constant_(self.conv.bias, 0.0)
+        
         if is_sn:
             self.conv = nn.utils.spectral_norm(self.conv)
 
