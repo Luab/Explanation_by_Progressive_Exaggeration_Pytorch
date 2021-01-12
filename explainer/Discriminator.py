@@ -1,4 +1,6 @@
-from explainer.utils import *
+import torch.nn as nn
+import pytorch_lightning as pl
+from explainer.utils import DiscriminatorResBlock, GlobalSumPooling, InnerProduct, Dense
 
 
 class Discriminator(pl.LightningModule):
@@ -18,11 +20,8 @@ class Discriminator(pl.LightningModule):
         self.global_sum_pooling = GlobalSumPooling()
         self.inner_product = InnerProduct(self.n_bins, 1024)
         self.dense = Dense(1024, 1, is_sn=True)
-        # self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
 
     def forward(self, x, y):
-        # y = y[:, 0].squeeze().long()  # TODO Delete it after torchsummary
-        # print('shape of y:', y.size())
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
         x = self.d_res_block3(x)
@@ -31,16 +30,16 @@ class Discriminator(pl.LightningModule):
         x = self.d_res_block6(x)
         x = self.relu(x)
         x = self.global_sum_pooling(x)
-        
+
         temp = None
         for i in range(0, self.n_bins - 1):
             if i == 0:
                 temp = self.inner_product(x, y[:, i + 1].long())
             else:
                 temp += self.inner_product(x, y[:, i + 1].long())
-        
+
         x = self.dense(x)
-        
+
         x = temp + x
-        
+
         return x

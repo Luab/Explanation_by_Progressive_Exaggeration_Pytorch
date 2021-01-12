@@ -1,27 +1,26 @@
 import pytorch_lightning as pl
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
 import torch.nn.functional as F
+
 
 class ConditionalBatchNorm2d(pl.LightningModule):
     def __init__(self, nums_class, num_features):
         super().__init__()
-        
+
         self.num_features = num_features
-        
+
         self.bn = nn.BatchNorm2d(num_features=num_features, momentum=0.5, eps=1e-3)
-        
+
         self.beta = nn.Parameter(torch.zeros(size=[num_features]))
         self.gamma = nn.Parameter(torch.ones(size=[num_features]))
 
         self.beta_conditional = nn.Embedding(nums_class, num_features)
         nn.init.zeros_(self.beta_conditional.weight.data)
-        
+
         self.gamma_conditional = nn.Embedding(nums_class, num_features)
         nn.init.ones_(self.gamma_conditional.weight.data)
-    
-    
+
     def forward(self, x, y=None):
         if y is None:
             x = self.bn(x)
@@ -29,7 +28,7 @@ class ConditionalBatchNorm2d(pl.LightningModule):
             beta, gamma = self.beta_conditional(y.long()), self.gamma_conditional(y.long())
             beta = torch.reshape(beta, [-1, self.num_features, 1, 1])
             gamma = torch.reshape(gamma, [-1, self.num_features, 1, 1])
-            
+
             x = self.bn(x)
             x = gamma * x + beta
 
@@ -44,15 +43,6 @@ class Downsampling(pl.LightningModule):
         self.stride = 2
 
     def forward(self, x):
-        #   input dimension (height or width)
-        #   it is assumed that the input has the shape [batch_size, channels, height, width]
-        dim_in = x.shape[2]
-        #   padding = 'SAME'
-        padding_h = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
-        padding_w = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
-        # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
-        # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность с двух сторон, потом предыдущую. Или он вообще не нужен, хз
-        # x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
         x = F.avg_pool2d(x, self.kernel_size, self.stride)
 
         return x
@@ -63,7 +53,7 @@ class Dense(pl.LightningModule):
         super().__init__()
 
         self.fc = nn.Linear(in_channels, out_channels)
-        
+
         nn.init.xavier_uniform_(self.fc.weight)
         nn.init.constant_(self.fc.bias, 0.0)
 
@@ -148,7 +138,6 @@ class GeneratorResblock(pl.LightningModule):
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x, y):
-
         temp = self.identity(x)
 
         x = self.bn1(x, y)
@@ -213,10 +202,10 @@ class SpectralConv2d(pl.LightningModule):
         #   Assuming that stride = 1
         padding = int((kernel_size - 1) / 2)
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-            
+
         nn.init.xavier_uniform_(self.conv.weight)
         nn.init.constant_(self.conv.bias, 0.0)
-        
+
         if is_sn:
             self.conv = nn.utils.spectral_norm(self.conv)
 

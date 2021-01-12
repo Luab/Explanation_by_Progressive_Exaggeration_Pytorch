@@ -6,12 +6,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import yaml
 import os
-import subprocess as sp
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', default='configs/celebA_Young_Explainer.yaml')
+    parser.add_argument('--config', '-c', default='./configs/celebA_Young_Explainer.yaml')
     args = parser.parse_args()
 
     config_path = args.config
@@ -19,16 +18,16 @@ def main():
         config = yaml.safe_load(f)
 
     checkpoint_callback = ModelCheckpoint(
-        filepath=os.path.join('checkpoints/explainer', config['name'], 'explainer'),
+        filepath=os.path.join('checkpoints/explainer', config['name']),
         save_last=True,
         save_top_k=1,
-        monitor='g_loss_val',
+        monitor='val_g_loss',
         verbose=True,
         mode='min'
     )
     
     logger = TensorBoardLogger(config['log_dir'], name=config['name'])
-    data_module = DataModule(config, from_explainer=True)
+    data_module = DataModule(config, to_explainer=True)
     train_loader = data_module.train_dataloader()
     val_loader = data_module.val_dataloader()
 

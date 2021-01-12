@@ -1,7 +1,6 @@
 import pytorch_lightning as pl
-from explainer.utils import ConditionalBatchNorm2d, SpectralConv2d, GeneratorEncoderResblock, GeneratorResblock
-import subprocess as sp
 import torch.nn as nn
+from explainer.utils import ConditionalBatchNorm2d, SpectralConv2d, GeneratorEncoderResblock, GeneratorResblock
 
 
 class GeneratorEncoderDecoder(pl.LightningModule):
@@ -50,5 +49,5 @@ class GeneratorEncoderDecoder(pl.LightningModule):
         x = self.relu(x)
         x = self.conv(x)
         x = self.tanh(x)
-        
+
         return x, embedding
