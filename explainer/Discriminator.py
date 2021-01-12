@@ -1,6 +1,6 @@
-import pytorch_lightning as pl
-from explainer.utils import *
 import torch.nn as nn
+import pytorch_lightning as pl
+from explainer.utils import DiscriminatorResBlock, GlobalSumPooling, InnerProduct, Dense
 
 
 class Discriminator(pl.LightningModule):
@@ -17,33 +17,30 @@ class Discriminator(pl.LightningModule):
         self.d_res_block6 = DiscriminatorResBlock(in_channels=1024, out_channels=1024, is_down=False)
 
         self.relu = nn.ReLU()
-        self.global_sum_pooling = nn.AvgPool2d(kernel_size=4)
-        self.inner_product = InnerProduct(in_channels=1024, n_classes=2)
-        self.fc = nn.utils.spectral_norm(nn.Linear(1024, 1))
+        self.global_sum_pooling = GlobalSumPooling()
+        self.inner_product = InnerProduct(self.n_bins, 1024)
+        self.dense = Dense(1024, 1, is_sn=True)
 
     def forward(self, x, y):
-
-        y = y.squeeze()  # TODO Delete it after torchsummary
         x = self.d_res_block1(x)
         x = self.d_res_block2(x)
         x = self.d_res_block3(x)
         x = self.d_res_block4(x)
         x = self.d_res_block5(x)
         x = self.d_res_block6(x)
-
         x = self.relu(x)
-
         x = self.global_sum_pooling(x)
 
+        temp = None
         for i in range(0, self.n_bins - 1):
             if i == 0:
-                temp = self.inner_product(x, y[:, i + 1])
+                temp = self.inner_product(x, y[:, i + 1].long())
             else:
-                temp += self.inner_product(x, y[:, i + 1])
+                temp += self.inner_product(x, y[:, i + 1].long())
 
-        x = x.view(-1, 1024)
-        x = self.fc(x)
+        x = self.dense(x)
 
         x = temp + x
 
         return x
+      

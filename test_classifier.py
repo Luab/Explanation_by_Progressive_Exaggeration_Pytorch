@@ -10,7 +10,7 @@ import tqdm
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', default='configs/celebA_YSBBB_Classifier.yaml')
+    parser.add_argument('--config', '-c', default='./configs/celebA_Young_Classifier.yaml')
     args = parser.parse_args()
 
     config_path = args.config
@@ -23,23 +23,21 @@ def main():
     
     data_module = DataModule(config)
     
-    train_csv = data_module.train_dataset.data
-    test_csv = data_module.val_dataset.data
+    image_dir='./data/CelebA/images/'
+    
+    train_csv = data_module.train_dataset.df
+    test_csv = data_module.val_dataset.df
     
     train_loader = data_module.train_dataloader()
     test_loader = data_module.val_dataloader()
 
-    model = DenseNet121(config)
+    model = DenseNet121(config, pretrained=True)
     cls_ckpt_path = os.path.join('checkpoints/classifier', config['name'], 'last.ckpt')
     model.load_state_dict(torch.load(cls_ckpt_path)['state_dict'])
     
-    device = 'cpu'
-    if torch.cuda.is_available():
-        print('Training on GPU...')
-        device = 'cuda'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    model.to(device)
-    
+    model = model.to(device)
     model.eval()
 
     names = np.empty([0])
@@ -55,7 +53,7 @@ def main():
             ns = train_csv.iloc[start: start + model.batch_size]['Path'].to_list()
         
             for i in range(len(ns)):
-                ns[i] = os.path.join(data_module.image_dir, ns[i])
+                ns[i] = os.path.join(image_dir, ns[i])
             
             predictions = torch.sigmoid(model(images))
 
@@ -87,7 +85,7 @@ def main():
             ns = test_csv.iloc[start: start + model.batch_size]['Path'].to_list()
         
             for i in range(len(ns)):
-                ns[i] = os.path.join(data_module.image_dir, ns[i])
+                ns[i] = os.path.join(image_dir, ns[i])
             
             predictions = torch.sigmoid(model(images))
 

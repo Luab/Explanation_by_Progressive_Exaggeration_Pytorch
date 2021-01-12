@@ -1,70 +1,38 @@
 import pytorch_lightning as pl
 import torch.nn as nn
-import torch.nn.functional as F
-import subprocess as sp
 import torch
+import torch.nn.functional as F
 
 
-class ConditionalBatchNorm2dBase(nn.BatchNorm2d):
-    """Conditional Batch Normalization"""
+class ConditionalBatchNorm2d(pl.LightningModule):
+    def __init__(self, nums_class, num_features):
+        super().__init__()
 
-    def __init__(self, num_features, eps=1e-3, momentum=0.5,
-                 affine=False, track_running_stats=True):
-        super(ConditionalBatchNorm2dBase, self).__init__(
-            num_features, eps, momentum, affine, track_running_stats
-        )
+        self.num_features = num_features
 
-    def forward(self, input, weight, bias, **kwargs):
-        self._check_input_dim(input)
+        self.bn = nn.BatchNorm2d(num_features=num_features, momentum=0.5, eps=1e-3)
 
-        exponential_average_factor = 0.0
+        self.beta = nn.Parameter(torch.zeros(size=[num_features]))
+        self.gamma = nn.Parameter(torch.ones(size=[num_features]))
 
-        if self.training and self.track_running_stats:
-            self.num_batches_tracked += 1
-            if self.momentum is None:  # use cumulative moving average
-                exponential_average_factor = 1.0 / self.num_batches_tracked.item()
-            else:  # use exponential moving average
-                exponential_average_factor = self.momentum
+        self.beta_conditional = nn.Embedding(nums_class, num_features)
+        nn.init.zeros_(self.beta_conditional.weight.data)
 
-        output = F.batch_norm(input, self.running_mean, self.running_var,
-                              self.weight, self.bias,
-                              self.training or not self.track_running_stats,
-                              exponential_average_factor, self.eps)
-        if weight.dim() == 1:
-            weight = weight.unsqueeze(0)
-        if bias.dim() == 1:
-            bias = bias.unsqueeze(0)
-        size = output.size()
-        weight = weight.unsqueeze(-1).unsqueeze(-1).expand(size)
-        bias = bias.unsqueeze(-1).unsqueeze(-1).expand(size)
-        return weight * output + bias
+        self.gamma_conditional = nn.Embedding(nums_class, num_features)
+        nn.init.ones_(self.gamma_conditional.weight.data)
 
+    def forward(self, x, y=None):
+        if y is None:
+            x = self.bn(x)
+        else:
+            beta, gamma = self.beta_conditional(y.long()), self.gamma_conditional(y.long())
+            beta = torch.reshape(beta, [-1, self.num_features, 1, 1])
+            gamma = torch.reshape(gamma, [-1, self.num_features, 1, 1])
 
-class ConditionalBatchNorm2d(ConditionalBatchNorm2dBase):
+            x = self.bn(x)
+            x = gamma * x + beta
 
-    def __init__(self, num_classes, num_features, eps=1e-3, momentum=0.5,
-                 affine=False, track_running_stats=True):
-        super(ConditionalBatchNorm2d, self).__init__(
-            num_features, eps, momentum, affine, track_running_stats
-        )
-
-        self.input_shape = num_features
-
-        self.beta1 = torch.zeros(size=[num_features], requires_grad=True, device='cuda')
-        self.gamma1 = torch.ones(size=[num_features], requires_grad=True, device='cuda')
-
-        self.beta2 = torch.zeros(size=[num_classes, num_features], requires_grad=True, device='cuda')
-        self.gamma2 = torch.ones(size=[num_classes, num_features], requires_grad=True, device='cuda')
-
-    def forward(self, input, y, **kwargs):
-        if y is not None:
-            embedding_weight = nn.Embedding.from_pretrained(self.beta2)
-            embedding_gamma = nn.Embedding.from_pretrained(self.gamma2)
-
-            self.beta1 = torch.reshape(embedding_weight(y), [-1, self.input_shape])
-            self.gamma1 = torch.reshape(embedding_gamma(y), [-1, self.input_shape])
-
-        return super(ConditionalBatchNorm2d, self).forward(input, self.beta1, self.gamma1)
+        return x
 
 
 class Downsampling(pl.LightningModule):
@@ -75,15 +43,6 @@ class Downsampling(pl.LightningModule):
         self.stride = 2
 
     def forward(self, x):
-        #   input dimension (height or width)
-        #   it is assumed that the input has the shape [batch_size, channels, height, width]
-        dim_in = x.shape[2]
-        #   padding = 'SAME'
-        padding_h = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
-        padding_w = int((dim_in * (self.stride - 1) + self.kernel_size - self.stride) / 2)
-        # x = F.pad(x, (padding_h * 2, padding_w * 2), 'constant', 0)
-        # Чекай сайт https://pytorch.org/docs/stable/nn.functional.html, сначала паддим последнюю размерность с двух сторон, потом предыдущую. Или он вообще не нужен, хз
-        # x = F.pad(x, [padding_h, padding_h, padding_w, padding_w], 'constant', 0)
         x = F.avg_pool2d(x, self.kernel_size, self.stride)
 
         return x
@@ -95,6 +54,9 @@ class Dense(pl.LightningModule):
 
         self.fc = nn.Linear(in_channels, out_channels)
 
+        nn.init.xavier_uniform_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0.0)
+
         if is_sn:
             self.fc = nn.utils.spectral_norm(self.fc)
 
@@ -105,22 +67,16 @@ class Dense(pl.LightningModule):
 
 
 class InnerProduct(pl.LightningModule):
-    def __init__(self, in_channels, n_classes):
+    def __init__(self, nums_class, n_channels):
         super().__init__()
 
-        # nn.utils.spectral_norm inputs a layer, I wrapped v into Linear
-        # I can not assign 2 spectral norm twice (python throws an Error, that's why I took it to __init__
-        self.embedding = torch.nn.Embedding(n_classes, in_channels)
-        self.embedding = torch.nn.utils.spectral_norm(self.embedding)
+        self.V = nn.Embedding(nums_class, n_channels)
+        nn.init.xavier_uniform_(self.V.weight.data)
+        self.V = nn.utils.spectral_norm(self.V)
 
     def forward(self, x, y):
-        # Cast y to long(), index should be int.
-        temp = self.embedding(y.long())
-
-        x = x.squeeze()  # Сжимаем [n, 1024, 1, 1] до [n, 1024] и потом element-wise multiply with x
-
-        temp = temp * x
-
+        temp = self.V(y)
+        temp = torch.sum(temp * x, dim=1, keepdim=True)
         return temp
 
 
@@ -129,31 +85,22 @@ class GlobalSumPooling(pl.LightningModule):
         super().__init__()
 
     def forward(self, x):
-        x = torch.sum(x, [1, 2])
+        x = torch.sum(x, [2, 3], keepdim=False)
 
         return x
 
 
 class GeneratorEncoderResblock(pl.LightningModule):
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
-
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-
     def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.downsampling = Downsampling()
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
@@ -176,31 +123,21 @@ class GeneratorEncoderResblock(pl.LightningModule):
 
 
 class GeneratorResblock(pl.LightningModule):
-    def get_gpu_memory(self):
-        _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
-
-        ACCEPTABLE_AVAILABLE_MEMORY = 1024
-        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
-        memory_free_info = _output_to_list(sp.check_output(COMMAND.split()))[1:]
-        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-        return memory_free_values[0]
-
     def __init__(self, in_channels, out_channels, num_classes, is_sn=False):
         super().__init__()
 
         self.identity = nn.Identity()
-        self.bn1 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=in_channels)
+        self.bn1 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=in_channels)
         self.relu = nn.ReLU()
         self.upsampling = nn.Upsample(scale_factor=2)
         self.conv1 = SpectralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
-        self.bn2 = ConditionalBatchNorm2d(num_classes=num_classes, num_features=out_channels)
+        self.bn2 = ConditionalBatchNorm2d(nums_class=num_classes, num_features=out_channels)
         self.conv2 = SpectralConv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1,
                                     is_sn=is_sn)
         self.conv_identity = SpectralConv2d(in_channels, out_channels, kernel_size=1, stride=1, is_sn=is_sn)
 
     def forward(self, x, y):
-
         temp = self.identity(x)
 
         x = self.bn1(x, y)
@@ -265,6 +202,9 @@ class SpectralConv2d(pl.LightningModule):
         #   Assuming that stride = 1
         padding = int((kernel_size - 1) / 2)
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+
+        nn.init.xavier_uniform_(self.conv.weight)
+        nn.init.constant_(self.conv.bias, 0.0)
 
         if is_sn:
             self.conv = nn.utils.spectral_norm(self.conv)

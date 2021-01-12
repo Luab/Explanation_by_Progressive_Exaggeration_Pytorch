@@ -2,30 +2,30 @@ import os
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+import torchvision
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
 
 
 class DataModule(pl.LightningModule):
-
     class CustomDataset(Dataset):
-        def __init__(self, csv_data, im_folder, _transforms, from_explainer):
-            self.transforms = _transforms
-            self.im_folder = im_folder
-            self.data = csv_data
-            self.from_explainer = from_explainer
+        def __init__(self, df, image_dir, transforms, to_explainer, append_to_path=''):
+            self.transforms = transforms
+            self.image_dir = image_dir
+            self.df = df
+            self.to_explainer = to_explainer
+            self.append_to_path = append_to_path
 
         def __getitem__(self, item):
-            line = self.data.iloc[item]
-
-            if not self.from_explainer:
-                image_path, labels = line[0], torch.tensor(line[1:])
-                image_path = os.path.join(self.im_folder, image_path)
+            line = self.df.iloc[item]
+            
+            if self.to_explainer:
+                image_path = self.append_to_path + line[0]
             else:
-                image_path, labels = line[0], torch.tensor(line[1:])[0]
-
+                image_path = os.path.join(self.image_dir, line[0])
+            
+            labels = torch.tensor(line[1:])
             image = Image.open(image_path).convert('RGB')
 
             if self.transforms is not None:
@@ -34,45 +34,41 @@ class DataModule(pl.LightningModule):
             return image, labels
 
         def __len__(self):
-            return self.data.shape[0]
+            return self.df.shape[0]
 
-    def __init__(self, config, from_explainer=False):
+    def __init__(self, config, to_explainer=False, append_to_path=''):
         super().__init__()
 
-        self.image_dir = './data/CelebA/images/'
-        self.data_path = config['image_label_dict']
         self.batch_size = config['batch_size']
-
-        print(
-            f"Image dir: {self.image_dir}\n"
-            f"Data path: {self.data_path}\n"
-            f"Batch size: {self.batch_size}"
-        )
-
-        self.transforms = transforms.Compose([
-            # Input PIL Image
-            transforms.CenterCrop(150),
-            transforms.Resize(size=(128, 128)),
-            transforms.ToTensor(),
-            # The same, but parallelize
-            transforms.Normalize(mean=[0.0, 0.0, 0.0], std=[2.0, 2.0, 2.0])
-        ])
-
-        if not from_explainer:
-            self.data = pd.read_csv(self.data_path)
+        
+        data = None
+        if not to_explainer:
+            data = pd.read_csv(config['image_label_dict'])
         else:
-            attr_names, attr_list = self.read_data_file(self.data_path)
-            self.data = pd.DataFrame(attr_list.items(), columns=['Path', 'Bin'])
+            attr_names, attr_list = self.read_data_file(file_path=config['image_label_dict'])
+            data = pd.DataFrame(attr_list.items(), columns=['Path', 'Bin'])
 
-        train_data, val_data = train_test_split(self.data, test_size=0.33, random_state=4)
+        transforms = torchvision.transforms.Compose([
+            torchvision.transforms.CenterCrop(150),
+            torchvision.transforms.Resize(size=(128, 128)),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=[0.0, 0.0, 0.0], std=[2.0, 2.0, 2.0])
+        ])
+        
+        train_data, val_data = train_test_split(data, test_size=0.33, random_state=4)
         train_data.index = range(len(train_data))
         val_data.index = range(len(val_data))
 
-        self.train_dataset = DataModule.CustomDataset(train_data, self.image_dir, self.transforms, from_explainer)
-        self.val_dataset = DataModule.CustomDataset(val_data, self.image_dir, self.transforms, from_explainer)
-
-        assert os.path.isdir(self.image_dir), f"Check image path:{self.image_dir}!"
-        assert os.path.isfile(self.data_path), f"File {self.data_path} is not found!"
+        self.train_dataset = DataModule.CustomDataset(df=train_data,
+                                                      image_dir='./data/CelebA/images/',
+                                                      transforms=transforms,
+                                                      to_explainer=to_explainer,
+                                                      append_to_path=append_to_path)
+        self.val_dataset = DataModule.CustomDataset(df=val_data,
+                                                    image_dir='./data/CelebA/images/',
+                                                    transforms=transforms,
+                                                    to_explainer=to_explainer,
+                                                    append_to_path=append_to_path)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, self.batch_size, True, num_workers=32, drop_last=True)
@@ -105,3 +101,4 @@ class DataModule(pl.LightningModule):
         file.close()
 
         return attr_names, attr_list
+      

@@ -11,7 +11,7 @@ import yaml
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c',
-                        default='/home/intern/BS19_implementation/configs/celebA_Smile_Classifier.yaml')
+                        default='./configs/celebA_Young_Classifier.yaml')
     args = parser.parse_args()
 
     config_path = args.config
@@ -19,7 +19,7 @@ def main():
         config = yaml.safe_load(f)
 
     checkpoint_callback = ModelCheckpoint(
-        filepath=os.path.join('checkpoints/classifier', config['name'], 'model.ckpt'),
+        filepath=os.path.join('checkpoints/classifier', config['name']),
         save_last=True,
         save_top_k=1,
         verbose=True,
@@ -35,11 +35,10 @@ def main():
 
     model = DenseNet121(config, pretrained=True)
 
-    trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callback=checkpoint_callback,
-                         progress_bar_refresh_rate=20)
-
+    trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callbacks=[checkpoint_callback])
     trainer.fit(model, train_loader, val_loader)
 
 
 if __name__ == '__main__':
     main()
+    
