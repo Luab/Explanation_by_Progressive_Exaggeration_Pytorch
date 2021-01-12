@@ -101,3 +101,4 @@ class DataModule(pl.LightningModule):
         file.close()
 
         return attr_names, attr_list
+      

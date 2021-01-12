@@ -43,3 +43,4 @@ class Discriminator(pl.LightningModule):
         x = temp + x
 
         return x
+      

@@ -42,3 +42,4 @@ class DenseNet121(pl.LightningModule):
         self.log('val_loss', val_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         return val_loss
+      
