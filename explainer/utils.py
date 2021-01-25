@@ -4,33 +4,55 @@ import torch
 import torch.nn.functional as F
 
 
-class ConditionalBatchNorm2d(pl.LightningModule):
-    def __init__(self, nums_class, num_features):
-        super().__init__()
-
-        self.num_features = num_features
-
-        self.bn = nn.BatchNorm2d(num_features=num_features, momentum=0.5, eps=1e-3)
-
-        self.beta = nn.Parameter(torch.zeros(size=[num_features]))
-        self.gamma = nn.Parameter(torch.ones(size=[num_features]))
-
+# https://github.com/ptrblck/pytorch_misc/blob/master/batch_norm_manual.py
+class ConditionalBatchNorm2d(nn.BatchNorm2d):
+    def __init__(self, nums_class, num_features, eps=1e-3, momentum=0.5,
+                 affine=True, track_running_stats=True):
+        super(ConditionalBatchNorm2d, self).__init__(
+            num_features, eps, momentum, affine, track_running_stats)
+        
         self.beta_conditional = nn.Embedding(nums_class, num_features)
         nn.init.zeros_(self.beta_conditional.weight.data)
-
+        
         self.gamma_conditional = nn.Embedding(nums_class, num_features)
         nn.init.ones_(self.gamma_conditional.weight.data)
-
+        
     def forward(self, x, y=None):
-        if y is None:
-            x = self.bn(x)
-        else:
-            beta, gamma = self.beta_conditional(y.long()), self.gamma_conditional(y.long())
-            beta = torch.reshape(beta, [-1, self.num_features, 1, 1])
-            gamma = torch.reshape(gamma, [-1, self.num_features, 1, 1])
+        exponential_average_factor = 0.0
 
-            x = self.bn(x)
-            x = gamma * x + beta
+        if self.training and self.track_running_stats:
+            if self.num_batches_tracked is not None:
+                self.num_batches_tracked += 1
+                if self.momentum is None:  # use cumulative moving average
+                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                else:  # use exponential moving average
+                    exponential_average_factor = self.momentum
+
+        # calculate running estimates
+        if self.training:
+            mean = x.mean([0, 2, 3])
+            # use biased var in train
+            var = x.var([0, 2, 3], unbiased=False)
+            n = x.numel() / x.size(1)
+            with torch.no_grad():
+                self.running_mean = exponential_average_factor * mean\
+                    + (1 - exponential_average_factor) * self.running_mean
+                # update running_var with unbiased var
+                self.running_var = exponential_average_factor * var * n / (n - 1)\
+                    + (1 - exponential_average_factor) * self.running_var
+        else:
+            mean = self.running_mean
+            var = self.running_var
+
+        x = (x - mean[None, :, None, None]) / (torch.sqrt(var[None, :, None, None] + self.eps))
+        if self.affine:
+            if y is None:
+                x = x * self.weight[None, :, None, None] + self.bias[None, :, None, None]
+            else:
+                beta_conditional = self.beta_conditional(y.long())
+                gamma_conditional = self.gamma_conditional(y.long())
+                 
+                x = gamma_conditional[:, :, None, None] * x + beta_conditional[:, :, None, None]
 
         return x
 

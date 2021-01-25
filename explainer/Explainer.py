@@ -65,7 +65,7 @@ class Explainer(pl.LightningModule):
             return d_loss
 
         self.train_step += 1
-
+        
         return None
 
     def validation_step(self, batch, batch_idx):
@@ -121,38 +121,41 @@ class Explainer(pl.LightningModule):
         g_loss = g_loss_gan * self.lambda_gan + \
                  (g_loss_rec + g_loss_cyc) * self.lambda_cyc + \
                  (fake_evaluation + recons_evaluation) * self.lambda_cls
-
-        if stage == 'train' and (self.train_step + 1) % 5 == 0:
-            grid_x_source = torchvision.utils.make_grid(x_source, nrow=8)
-            grid_fake_target_img = torchvision.utils.make_grid(fake_target_img, nrow=8)
-            grid_fake_source_img = torchvision.utils.make_grid(fake_source_img, nrow=8)
-            grid_fake_source_recons_img = torchvision.utils.make_grid(fake_source_recons_img, nrow=8)
-            self.logger.experiment.add_image('real_img : Train stage', grid_x_source, self.train_step)
-            self.logger.experiment.add_image('fake_target_img : Train stage', grid_fake_target_img, self.train_step)
-            self.logger.experiment.add_image('fake_source_img : Train stage', grid_fake_source_img, self.train_step)
-            self.logger.experiment.add_image('fake_source_recons_img : Train stage', grid_fake_source_recons_img,
+        
+        if stage == 'train':
+            if self.train_step % 500 == 0:
+                grid_x_source = torchvision.utils.make_grid(x_source * 0.5 + 0.5, nrow=8)
+                grid_fake_target_img = torchvision.utils.make_grid(fake_target_img * 0.5 + 0.5, nrow=8)
+                grid_fake_source_img = torchvision.utils.make_grid(fake_source_img * 0.5 + 0.5, nrow=8)
+                grid_fake_source_recons_img = torchvision.utils.make_grid(fake_source_recons_img * 0.5 + 0.5, nrow=8)
+                self.logger.experiment.add_image('real_img : Train stage', grid_x_source, self.train_step)
+                self.logger.experiment.add_image('fake_target_img : Train stage', grid_fake_target_img, self.train_step)
+                self.logger.experiment.add_image('fake_source_img : Train stage', grid_fake_source_img, self.train_step)
+                self.logger.experiment.add_image('fake_source_recons_img : Train stage', grid_fake_source_recons_img,
                                              self.train_step)
-            self.logger.experiment.add_scalar('g_loss_gan_train', g_loss_gan, self.train_step)
-            self.logger.experiment.add_scalar('g_loss_cyc_train', g_loss_cyc, self.train_step)
-            self.logger.experiment.add_scalar('g_loss_rec_train', g_loss_rec, self.train_step)
-            self.logger.experiment.add_scalar('fake_evaluation_train', fake_evaluation, self.train_step)
-            self.logger.experiment.add_scalar('recons_evaluation_train', recons_evaluation, self.train_step)
+            
+            self.log('train_g_loss_gan', g_loss_gan, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('train_g_loss_cyc', g_loss_cyc, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('train_g_loss_rec', g_loss_rec, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('train_fake_evaluation', fake_evaluation, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('train_recons_evaluation', recons_evaluation, on_step=True, on_epoch=False, prog_bar=False, logger=True)
 
-        if stage == 'val' and (self.val_step + 1) % 5 == 0:
-            grid_x_source = torchvision.utils.make_grid(x_source, nrow=8)
-            grid_fake_target_img = torchvision.utils.make_grid(fake_target_img, nrow=8)
-            grid_fake_source_img = torchvision.utils.make_grid(fake_source_img, nrow=8)
-            grid_fake_source_recons_img = torchvision.utils.make_grid(fake_source_recons_img, nrow=8)
-            self.logger.experiment.add_image('real_img : Validation stage', grid_x_source, self.val_step)
-            self.logger.experiment.add_image('fake_target_img : Validation stage', grid_fake_target_img, self.val_step)
-            self.logger.experiment.add_image('fake_source_img : Validation stage', grid_fake_source_img, self.val_step)
-            self.logger.experiment.add_image('fake_source_recons_img : Validation stage', grid_fake_source_recons_img,
-                                             self.val_step)
-            self.logger.experiment.add_scalar('g_loss_gan_val', g_loss_gan, self.val_step)
-            self.logger.experiment.add_scalar('g_loss_cyc_val', g_loss_cyc, self.val_step)
-            self.logger.experiment.add_scalar('g_loss_rec_val', g_loss_rec, self.val_step)
-            self.logger.experiment.add_scalar('fake_evaluation_val', fake_evaluation, self.val_step)
-            self.logger.experiment.add_scalar('recons_evaluation_val', recons_evaluation, self.val_step)
+        if stage == 'val':
+            if self.val_step % 500 == 0:
+                grid_x_source = torchvision.utils.make_grid(x_source * 0.5 + 0.5, nrow=8)
+                grid_fake_target_img = torchvision.utils.make_grid(fake_target_img * 0.5 + 0.5, nrow=8)
+                grid_fake_source_img = torchvision.utils.make_grid(fake_source_img * 0.5 + 0.5, nrow=8)
+                grid_fake_source_recons_img = torchvision.utils.make_grid(fake_source_recons_img * 0.5 + 0.5, nrow=8)
+                self.logger.experiment.add_image('real_img : Validation stage', grid_x_source, self.val_step)
+                self.logger.experiment.add_image('fake_target_img : Validation stage', grid_fake_target_img, self.val_step)
+                self.logger.experiment.add_image('fake_source_img : Validation stage', grid_fake_source_img, self.val_step)
+                self.logger.experiment.add_image('fake_source_recons_img : Validation stage', grid_fake_source_recons_img, self.val_step)
+            
+            self.log('val_g_loss_gan', g_loss_gan, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('val_g_loss_cyc', g_loss_cyc, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('val_g_loss_rec', g_loss_rec, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('val_fake_evaluation', fake_evaluation, on_step=True, on_epoch=False, prog_bar=False, logger=True)
+            self.log('val_recons_evaluation', recons_evaluation, on_step=True, on_epoch=False, prog_bar=False, logger=True)
 
         return g_loss
 
@@ -166,11 +169,11 @@ class Explainer(pl.LightningModule):
 
         d_loss_gan = self.discriminator_loss(real_source_logits, fake_target_logits)
 
-        if stage == 'train' and (self.train_step + 1) % 5 == 0:
-            self.logger.experiment.add_scalar('d_loss_gan_train', d_loss_gan, self.train_step)
+        if stage == 'train':
+            self.log('train_d_loss_gan', d_loss_gan, on_step=True, on_epoch=False, prog_bar=False, logger=True)
 
-        if stage == 'val' and (self.val_step + 1) % 5 == 0:
-            self.logger.experiment.add_scalar('d_loss_gan_val', d_loss_gan, self.val_step)
+        if stage == 'val':
+            self.log('val_d_loss_gan', d_loss_gan, on_step=True, on_epoch=False, prog_bar=False, logger=True)
 
         d_loss = d_loss_gan * self.lambda_gan
 

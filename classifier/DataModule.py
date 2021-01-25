@@ -52,7 +52,7 @@ class DataModule(pl.LightningModule):
             torchvision.transforms.CenterCrop(150),
             torchvision.transforms.Resize(size=(128, 128)),
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=[0.0, 0.0, 0.0], std=[2.0, 2.0, 2.0])
+            torchvision.transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         ])
         
         train_data, val_data = train_test_split(data, test_size=0.33, random_state=4)
