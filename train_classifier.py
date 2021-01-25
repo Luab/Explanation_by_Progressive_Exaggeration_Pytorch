@@ -10,8 +10,8 @@ import yaml
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c',
-                        default='./configs/celebA_Young_Classifier.yaml')
+    parser.add_argument('--config', '-c', default='./configs/celebA_Young_Classifier.yaml')
+    parser.add_argument('--resume_from_ckpt', help='resume from the latest checkpoint', action='store_true')
     args = parser.parse_args()
 
     config_path = args.config
@@ -19,7 +19,7 @@ def main():
         config = yaml.safe_load(f)
 
     checkpoint_callback = ModelCheckpoint(
-        filepath=os.path.join('checkpoints/classifier', config['name']),
+        filepath=os.path.join('checkpoints/classifier', config['name'], 'clf'),
         save_last=True,
         save_top_k=1,
         verbose=True,
@@ -34,8 +34,13 @@ def main():
     train_loader = data_module.train_dataloader()
 
     model = DenseNet121(config, pretrained=True)
-
-    trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callbacks=[checkpoint_callback])
+    
+    if args.resume_from_ckpt:
+        print('Resuming from the latest checkpoint...')
+        trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callbacks=[checkpoint_callback], resume_from_checkpoint=os.path.join('checkpoints/classifier', config['name'], 'last.ckpt'))
+    else:
+        trainer = pl.Trainer(gpus=1, max_epochs=model.epochs, logger=logger, callbacks=[checkpoint_callback])
+    
     trainer.fit(model, train_loader, val_loader)
 
 
